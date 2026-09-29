@@ -21,7 +21,7 @@ export const firebaseConfig = {
 
 export const firebaseApp = initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
-export const db = getFirestore(firebaseApp);
+export const db = getFirestore(firebaseApp, "order");
 
 /**
  * App 目前的網址根目錄（含 GitHub Pages 的子路徑，例如
