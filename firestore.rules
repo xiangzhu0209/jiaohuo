@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// 叫貨單系統 Firestore 安全規則
+//
+// 原則：只有「已登入」的帳號可以讀寫叫貨資料；姓名（profiles）只能改自己的。
+// 未登入的訪客完全讀不到任何資料。
+//
+// 使用方式：Firebase 主控台 → Firestore Database → 規則 → 貼上整份內容 → 發布。
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // 廠商
+    match /vendors/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    // 價格表
+    match /price_list/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    // 叫貨單
+    match /orders/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    // 叫貨明細
+    match /order_items/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    // 使用者姓名：所有人都讀得到（印單要顯示出單人），但只能改自己的
+    match /profiles/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+  }
+}
