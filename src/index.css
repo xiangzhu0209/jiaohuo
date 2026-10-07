@@ -229,6 +229,31 @@ body,
   }
 }
 
+/*
+ * A5 橫式：頁面名稱要標在最上層（<html>），不能只標在紙張上。
+ * 只標在內層時，Chrome 會先用預設的 A4 產生一張空白頁，再換成 A5 印內容。
+ */
+@media print {
+  html.print-page-a5l,
+  html.print-page-a5l body {
+    page: a5l;
+  }
+}
+
+/* 列印時拿掉螢幕用的高度／捲動限制，否則容易多出空白頁或內容被裁掉 */
+@media print {
+  html,
+  body,
+  #root {
+    height: auto !important;
+  }
+
+  main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
+
 @media print {
   body {
     background: #fff !important;
