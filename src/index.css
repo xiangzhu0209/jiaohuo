@@ -204,6 +204,30 @@ body,
   --gradient-brand: none;
 }
 
+/*
+ * 叫貨單字級：廠商反映原本的字太小，這裡直接把紙張內的字級拉大一級。
+ * A4 直式主體 18px、A5 橫式主體 16px（螢幕預覽與列印結果一致）。
+ */
+.paper-sheet table {
+  font-size: 1.125rem; /* 18px */
+}
+
+.paper-sheet .grid-cols-2 {
+  font-size: 1.125rem; /* 客戶名／案名／訂單備註 */
+}
+
+/* 字變大後把上下內距收一點，避免一位客戶多跑一頁 */
+.paper-sheet table th,
+.paper-sheet table td {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.sheet-a5-landscape table,
+.sheet-a5-landscape .grid-cols-2 {
+  font-size: 1rem; /* A5 橫式 16px */
+}
+
 /* ---------- Print: only the .print-area is visible ---------- */
 @page {
   size: A4 portrait;
@@ -293,6 +317,20 @@ body,
 
   .print-sheet:last-child {
     break-after: auto;
+  }
+
+  /*
+   * A5 橫式：整份文件一起換頁面名稱，避免 Chrome 先用 A4 印出一張空白頁。
+   * 用 :has() 找出「裡面有 A5 紙張」的 html/body，不需要額外的程式。
+   */
+  html:has(.sheet-a5-landscape),
+  body:has(.sheet-a5-landscape) {
+    page: a5l;
+  }
+
+  /* 批次列印：紙張之間的間距歸零，否則容易多出空白頁 */
+  div:has(> .print-sheet) {
+    gap: 0 !important;
   }
 
   /* 列印一律黑白的文件樣式：即使深色模式也要印出高對比內容 */
