@@ -4,12 +4,6 @@ import type { Order, OrderItem } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
 import OrderSheet from "./order-sheet";
 
-/**
- * Renders one customer's 叫貨單 sheet. All vendors' items are merged into a
- * single sheet (with a 廠商 column) so a customer fits on one page; a sheet
- * flows onto a second page only when there are many items. `singleVendor`
- * renders just one vendor's items for sending to that vendor.
- */
 export default function OrderSheets({
   order,
   items,
@@ -22,18 +16,22 @@ export default function OrderSheets({
   const { profileName } = useAuth();
   const issuer = profileName;
 
-  // 將明細進行同廠商群組化，並保持廠商首次出現的順序
-  const visibleItems = useMemo(() => {
-    const filtered = singleVendor
-      ? items.filter((it) => it.vendorId === singleVendor)
-      : items;
+  // 1. 如果有指定單一廠商，就只挑選該廠商；如果沒有，就顯示全部項目
+  const baseItems = useMemo(() => {
+    if (!singleVendor) return items;
+    return items.filter(
+      (it) => it.vendorId === singleVendor || it.vendorName === singleVendor
+    );
+  }, [items, singleVendor]);
 
+  // 2. 將明細進行同廠商群組化，並依照首次出現的順序排列
+  const visibleItems = useMemo(() => {
     const vendorOrder: string[] = [];
     const grouped = new Map<string, OrderItem[]>();
 
-    for (const it of filtered) {
-      // 若無 vendorId 則以 vendorName 代替，確保不會報錯
-      const key = it.vendorId || it.vendorName || "unknown";
+    for (const it of baseItems) {
+      // 優先使用 vendorName 分組，若無則用 vendorId，再沒有就歸類為 "其他"
+      const key = it.vendorName || it.vendorId || "其他";
       
       if (!grouped.has(key)) {
         vendorOrder.push(key);
@@ -48,20 +46,22 @@ export default function OrderSheets({
     }
 
     return sorted;
-  }, [items, singleVendor]);
+  }, [baseItems]);
 
   const vendorList = useMemo(() => {
     const seen = new Map<string, string>();
     for (const it of items) {
-      if (it.vendorId && !seen.has(it.vendorId)) {
-        seen.set(it.vendorId, it.vendorName ?? "");
+      const vId = it.vendorId || it.vendorName;
+      const vName = it.vendorName || it.vendorId;
+      if (vId && vName && !seen.has(vId)) {
+        seen.set(vId, vName);
       }
     }
     return [...seen.entries()];
   }, [items]);
 
   const vendorName = singleVendor
-    ? items.find((it) => it.vendorId === singleVendor)?.vendorName
+    ? items.find((it) => it.vendorId === singleVendor || it.vendorName === singleVendor)?.vendorName || singleVendor
     : undefined;
 
   return (
