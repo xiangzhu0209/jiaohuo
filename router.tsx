@@ -9,7 +9,6 @@ import BatchPrint from "./pages/BatchPrint";
 import Reconciliation from "./pages/Reconciliation";
 import Vendors from "./pages/Vendors";
 import Prices from "./pages/Prices";
-import Setup from "./pages/Setup";
 import NotFound from "./pages/NotFound";
 
 export const routers = [
@@ -40,7 +39,6 @@ export const routers = [
       { path: "reconciliation", name: "reconciliation", element: <Reconciliation /> },
       { path: "vendors", name: "vendors", element: <Vendors /> },
       { path: "prices", name: "prices", element: <Prices /> },
-      { path: "setup", name: "setup", element: <Setup /> },
     ],
   },
   /* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */

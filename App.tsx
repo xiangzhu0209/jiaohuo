@@ -5,10 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createHashRouter, RouterProvider } from "react-router-dom";
 import { routers } from "./router";
 import { AuthProvider } from "./hooks/use-auth";
-import { ResetPassword } from "./components/auth/reset-password";
-import { bootstrapTheme } from "./lib/theme";
-
-bootstrapTheme();
 
 const queryClient = new QueryClient();
 
@@ -20,7 +16,6 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <ResetPassword />
           <RouterProvider router={router} />
         </TooltipProvider>
       </AuthProvider>
