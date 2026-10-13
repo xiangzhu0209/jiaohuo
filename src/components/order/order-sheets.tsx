@@ -14,13 +14,16 @@ export default function OrderSheets({
   order,
   items,
   singleVendor,
+  paper = "a4",
 }: {
   order: Order;
   items: OrderItem[];
   singleVendor?: string | null;
+  paper?: "a4" | "a5l";
 }) {
   const { profileName } = useAuth();
-  const issuer = profileName;
+  // 出單人優先使用建立時記錄的姓名（舊單沒有則用目前登入者）
+  const issuer = order.createdBy || profileName;
 
   const visibleItems = useMemo(
     () =>
@@ -75,6 +78,7 @@ export default function OrderSheets({
         issuer={issuer}
         vendorName={vendorName}
         showVendorColumn={!singleVendor}
+        paper={paper}
       />
     </div>
   );
