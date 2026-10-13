@@ -25,11 +25,34 @@ export default function OrderSheets({
   // 出單人優先使用建立時記錄的姓名（舊單沒有則用目前登入者）
   const issuer = order.createdBy || profileName;
 
-  const visibleItems = useMemo(
-    () =>
-      singleVendor ? items.filter((it) => it.vendorId === singleVendor) : items,
-    [items, singleVendor],
-  );
+  const visibleItems = useMemo(() => {
+    const base = singleVendor
+      ? items.filter((it) => it.vendorId === singleVendor)
+      : items;
+
+    // 同廠商的明細排在一起：
+    // - 廠商之間依「第一次出現」的順序（也就是輸入的先後）
+    // - 同一廠商內維持原本輸入的先後順序
+    const vendorOrder: string[] = [];
+    const grouped = new Map<string, OrderItem[]>();
+    for (const it of base) {
+      const key = it.vendorId || it.vendorName || "其他";
+      const list = grouped.get(key);
+      if (list) {
+        list.push(it);
+      } else {
+        vendorOrder.push(key);
+        grouped.set(key, [it]);
+      }
+    }
+
+    const sorted: OrderItem[] = [];
+    for (const key of vendorOrder) {
+      const list = grouped.get(key);
+      if (list) sorted.push(...list);
+    }
+    return sorted;
+  }, [items, singleVendor]);
 
   const vendorList = useMemo(() => {
     const seen = new Map<string, string>();
