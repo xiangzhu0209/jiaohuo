@@ -14,22 +14,41 @@ export default function OrderSheets({
   order,
   items,
   singleVendor,
-  paper = "a4",
 }: {
   order: Order;
   items: OrderItem[];
   singleVendor?: string | null;
-  paper?: "a4" | "a5l";
 }) {
   const { profileName } = useAuth();
-  // 出單人優先使用建立時記錄的姓名（舊單沒有則用目前登入者）
-  const issuer = order.createdBy || profileName;
+  const issuer = profileName;
 
-  const visibleItems = useMemo(
-    () =>
-      singleVendor ? items.filter((it) => it.vendorId === singleVendor) : items,
-    [items, singleVendor],
-  );
+  // 將明細進行同廠商群組化，並保持廠商首次出現的順序
+  const visibleItems = useMemo(() => {
+    const filtered = singleVendor
+      ? items.filter((it) => it.vendorId === singleVendor)
+      : items;
+
+    const vendorOrder: string[] = [];
+    const grouped = new Map<string, OrderItem[]>();
+
+    for (const it of filtered) {
+      // 若無 vendorId 則以 vendorName 代替，確保不會報錯
+      const key = it.vendorId || it.vendorName || "unknown";
+      
+      if (!grouped.has(key)) {
+        vendorOrder.push(key);
+        grouped.set(key, []);
+      }
+      grouped.get(key)!.push(it);
+    }
+
+    const sorted: OrderItem[] = [];
+    for (const key of vendorOrder) {
+      sorted.push(...grouped.get(key)!);
+    }
+
+    return sorted;
+  }, [items, singleVendor]);
 
   const vendorList = useMemo(() => {
     const seen = new Map<string, string>();
@@ -78,7 +97,6 @@ export default function OrderSheets({
         issuer={issuer}
         vendorName={vendorName}
         showVendorColumn={!singleVendor}
-        paper={paper}
       />
     </div>
   );
