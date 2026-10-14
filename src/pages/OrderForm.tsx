@@ -1,7 +1,20 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, BookOpen, Copy, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  GripVertical,
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   createOrder,
   fetchAllOrderItems,
@@ -18,6 +31,7 @@ import {
 } from "@/lib/db";
 import type { OrderItem, OrderItemDraft, PriceItem } from "@/lib/types";
 import { fmtMoney, STATUS_LABELS, toNum } from "@/lib/order-utils";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,6 +75,9 @@ export default function OrderForm() {
   const [notes, setNotes] = useState("");
   const [sections, setSections] = useState<VendorSection[]>([]);
   const [picker, setPicker] = useState<{ sectionIndex: number; rowKey: string } | null>(null);
+  // 拖曳排序：目前抓住的明細，以及游標停在哪一列
+  const [dragging, setDragging] = useState<{ sectionIndex: number; key: string } | null>(null);
+  const [dropKey, setDropKey] = useState<string | null>(null);
 
   const { data: vendors = [] } = useQuery({
     queryKey: ["vendors"],
@@ -190,28 +207,30 @@ export default function OrderForm() {
         orderId = await createOrder({ ...base, orderNo, createdBy: profileName });
       }
 
-      const items: ItemInsert[] = sections.flatMap((s) =>
-        s.rows
-          .filter((r) => r.product_name.trim() !== "")
-          .map((r) => {
-            const historyPrice = latestPriceByKey.get(priceKey(s.vendorId, r.product_name));
-            return {
-              orderId,
-              orderNo,
-              orderDate,
-              customerName: customerName.trim(),
-              vendorId: s.vendorId || null,
-              vendorName: s.vendorId ? (vendorNameById.get(s.vendorId) ?? "") : "",
-              productName: r.product_name.trim(),
-              size: r.size.trim(),
-              usage: r.usage.trim(),
-              spec: r.spec.trim(),
-              quantity: Number(r.quantity) || 0,
-              unitPrice: Number(r.unit_price) || historyPrice || 0,
-              notes: r.notes.trim(),
-            };
-          }),
-      );
+      const items: ItemInsert[] = [];
+      for (const s of sections) {
+        for (const r of s.rows) {
+          if (r.product_name.trim() === "") continue;
+          const historyPrice = latestPriceByKey.get(priceKey(s.vendorId, r.product_name));
+          items.push({
+            orderId,
+            orderNo,
+            orderDate,
+            customerName: customerName.trim(),
+            vendorId: s.vendorId || null,
+            vendorName: s.vendorId ? (vendorNameById.get(s.vendorId) ?? "") : "",
+            productName: r.product_name.trim(),
+            size: r.size.trim(),
+            usage: r.usage.trim(),
+            spec: r.spec.trim(),
+            quantity: Number(r.quantity) || 0,
+            unitPrice: Number(r.unit_price) || historyPrice || 0,
+            notes: r.notes.trim(),
+            // 依表單上的排列順序記錄，確保下次打開、列印時順序完全相同
+            sortOrder: items.length,
+          });
+        }
+      }
 
       await replaceOrderItems(orderId, items);
       await upsertPrices(items);
@@ -263,6 +282,58 @@ export default function OrderForm() {
 
   const removeSection = (sectionIndex: number) => {
     setSections((prev) => prev.filter((_, i) => i !== sectionIndex));
+  };
+
+  /**
+   * 把一列明細搬到指定位置：可同一區塊內上下換位，也可拖到別的廠商區塊
+   * （搬過去後就屬於那個區塊的廠商）。`toKey` 為 null 代表放到最後。
+   */
+  const moveRow = (
+    from: { sectionIndex: number; key: string },
+    toSectionIndex: number,
+    toKey: string | null,
+  ) => {
+    if (from.sectionIndex === toSectionIndex && from.key === toKey) return;
+    setSections((prev) => {
+      const next = prev.map((s) => ({ ...s, rows: [...s.rows] }));
+      const src = next[from.sectionIndex];
+      const dst = next[toSectionIndex];
+      if (!src || !dst) return prev;
+      const fromIndex = src.rows.findIndex((r) => r.key === from.key);
+      if (fromIndex < 0) return prev;
+      const [moved] = src.rows.splice(fromIndex, 1);
+      const hit = toKey ? dst.rows.findIndex((r) => r.key === toKey) : dst.rows.length;
+      dst.rows.splice(hit < 0 ? dst.rows.length : hit, 0, moved);
+      return next;
+    });
+  };
+
+  /** 同一區塊內上／下移一列 */
+  const nudgeRow = (sectionIndex: number, key: string, delta: -1 | 1) => {
+    setSections((prev) =>
+      prev.map((s, i) => {
+        if (i !== sectionIndex) return s;
+        const from = s.rows.findIndex((r) => r.key === key);
+        const to = from + delta;
+        if (from < 0 || to < 0 || to >= s.rows.length) return s;
+        const rows = [...s.rows];
+        const [moved] = rows.splice(from, 1);
+        rows.splice(to, 0, moved);
+        return { ...s, rows };
+      }),
+    );
+  };
+
+  /** 整個廠商區塊上／下移（決定列印時廠商出現的先後順序） */
+  const nudgeSection = (sectionIndex: number, delta: -1 | 1) => {
+    setSections((prev) => {
+      const to = sectionIndex + delta;
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(sectionIndex, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
   };
 
   const addSection = () => {
@@ -519,6 +590,26 @@ export default function OrderForm() {
                         type="button"
                         variant="ghost"
                         size="icon"
+                        title="這個廠商區塊往上移"
+                        disabled={si === 0}
+                        onClick={() => nudgeSection(si, -1)}
+                      >
+                        <ArrowUp className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        title="這個廠商區塊往下移"
+                        disabled={si === sections.length - 1}
+                        onClick={() => nudgeSection(si, 1)}
+                      >
+                        <ArrowDown className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
                         title="移除此廠商區塊"
                         onClick={() => removeSection(si)}
                       >
@@ -526,15 +617,31 @@ export default function OrderForm() {
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="p-5">
+                  <CardContent
+                    className="p-5"
+                    onDragOver={(e) => {
+                      if (!dragging) return;
+                      e.preventDefault();
+                      if (dropKey !== null) setDropKey(null);
+                    }}
+                    onDrop={(e) => {
+                      if (!dragging) return;
+                      e.preventDefault();
+                      moveRow(dragging, si, null);
+                      setDragging(null);
+                      setDropKey(null);
+                    }}
+                  >
                     {sec.rows.length === 0 ? (
                       <p className="py-6 text-center text-sm text-muted-foreground">
-                        此廠商還沒有明細
+                        此廠商還沒有明細（可把別區塊的明細拖過來）
                       </p>
                     ) : (
                       <div className="overflow-x-auto">
-                        <div className="min-w-[720px]">
-                          <div className="grid grid-cols-[1.4fr_1fr_0.8fr_1fr_0.6fr_0.8fr_1fr_2rem] gap-2 border-b border-border/70 pb-2 text-xs font-semibold tracking-wide text-muted-foreground">
+                        <div className="min-w-[780px]">
+                          <div className="grid grid-cols-[1.25rem_1.5rem_1.4fr_1fr_0.8fr_1fr_0.6fr_0.8fr_1fr_2rem] gap-2 border-b border-border/70 pb-2 text-xs font-semibold tracking-wide text-muted-foreground">
+                            <span />
+                            <span />
                             <span>色號</span>
                             <span>尺寸</span>
                             <span>用量</span>
@@ -544,11 +651,68 @@ export default function OrderForm() {
                             <span>備註</span>
                             <span />
                           </div>
-                          {sec.rows.map((it) => (
+                          {sec.rows.map((it, ri) => (
                             <div
                               key={it.key}
-                              className="grid grid-cols-[1.4fr_1fr_0.8fr_1fr_0.6fr_0.8fr_1fr_2rem] items-center gap-2 border-b border-border/60 py-2 transition-colors last:border-b-0 hover:bg-muted/40"
+                              onDragOver={(e) => {
+                                if (!dragging) return;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (dropKey !== it.key) setDropKey(it.key);
+                              }}
+                              onDrop={(e) => {
+                                if (!dragging) return;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                moveRow(dragging, si, it.key);
+                                setDragging(null);
+                                setDropKey(null);
+                              }}
+                              className={cn(
+                                "grid grid-cols-[1.25rem_1.5rem_1.4fr_1fr_0.8fr_1fr_0.6fr_0.8fr_1fr_2rem] items-center gap-2 border-b border-border/60 py-2 transition-colors last:border-b-0 hover:bg-muted/40",
+                                dragging?.key === it.key && "opacity-40",
+                                dropKey === it.key && dragging?.key !== it.key && "bg-accent/60",
+                              )}
                             >
+                              <span
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.effectAllowed = "move";
+                                  setDragging({ sectionIndex: si, key: it.key });
+                                }}
+                                onDragEnd={() => {
+                                  setDragging(null);
+                                  setDropKey(null);
+                                }}
+                                title="抓住這裡拖曳，調整順序（也可拖到其他廠商區塊）"
+                                className="flex cursor-grab items-center justify-center text-muted-foreground/50 transition-colors hover:text-foreground active:cursor-grabbing"
+                              >
+                                <GripVertical className="size-4" />
+                              </span>
+                              <div className="flex flex-col items-center">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  title="上移一列"
+                                  className="size-5 text-muted-foreground"
+                                  disabled={ri === 0}
+                                  onClick={() => nudgeRow(si, it.key, -1)}
+                                >
+                                  <ChevronUp className="size-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  title="下移一列"
+                                  className="size-5 text-muted-foreground"
+                                  disabled={ri === sec.rows.length - 1}
+                                  onClick={() => nudgeRow(si, it.key, 1)}
+                                >
+                                  <ChevronDown className="size-3.5" />
+                                </Button>
+                              </div>
                               <Input
                                 value={it.product_name}
                                 onChange={(e) => {
@@ -634,6 +798,7 @@ export default function OrderForm() {
                 </Button>
                 <p className="text-sm text-muted-foreground">
                   共 {sections.reduce((n, s) => n + s.rows.filter((r) => r.product_name.trim() !== "").length, 0)} 筆明細
+                  <span className="ml-1">（用左側把手拖曳，或用箭頭調整順序）</span>
                 </p>
               </div>
             </div>
