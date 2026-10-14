@@ -100,6 +100,8 @@ const mapItem = (id: string, d: DocumentData): OrderItem => ({
   quantity: num(d.quantity),
   unitPrice: num(d.unitPrice),
   notes: str(d.notes),
+  // 舊資料沒有 sortOrder：留 undefined，排序時再依讀取順序處理
+  sortOrder: typeof d.sortOrder === "number" ? d.sortOrder : undefined,
   createdAt: str(d.createdAt),
 });
 
@@ -143,11 +145,20 @@ export async function fetchOrder(id: string): Promise<Order | null> {
   return snap.exists() ? mapOrder(snap.id, snap.data()) : null;
 }
 
+/**
+ * 明細排序：有記住 sortOrder 的照它排；沒有的（舊資料）一律排在最後，
+ * 因為 JS 排序是穩定的，會保留 Firestore 原本回傳的順序（舊單的文件編號
+ * 帶有 i001、i002… 的原始順序，所以舊單看起來仍然正確）。
+ */
+const sortOrderOf = (it: OrderItem): number =>
+  typeof it.sortOrder === "number" ? it.sortOrder : Number.MAX_SAFE_INTEGER;
+
+const byDisplayOrder = (a: OrderItem, b: OrderItem): number =>
+  sortOrderOf(a) - sortOrderOf(b);
+
 export async function fetchOrderItemsByOrder(orderId: string): Promise<OrderItem[]> {
   const snap = await getDocs(query(collection(db, COL.items), where("orderId", "==", orderId)));
-  return snap.docs
-    .map((d) => mapItem(d.id, d.data()))
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return snap.docs.map((d) => mapItem(d.id, d.data())).sort(byDisplayOrder);
 }
 
 export async function fetchOrderItemsByOrderIds(orderIds: string[]): Promise<OrderItem[]> {
@@ -157,7 +168,7 @@ export async function fetchOrderItemsByOrderIds(orderIds: string[]): Promise<Ord
     const snap = await getDocs(query(collection(db, COL.items), where("orderId", "in", chunk)));
     out.push(...snap.docs.map((d) => mapItem(d.id, d.data())));
   }
-  return out;
+  return out.sort(byDisplayOrder);
 }
 
 export async function fetchAllOrderItems(): Promise<OrderItem[]> {
@@ -221,6 +232,8 @@ export async function replaceOrderItems(orderId: string, items: ItemInsert[]): P
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         notes: it.notes ?? "",
+        // 沒有順序（舊表單）時給 0：讀取端一致，行為與以往相同
+        sortOrder: it.sortOrder ?? 0,
         createdAt: now,
       }),
     ),
