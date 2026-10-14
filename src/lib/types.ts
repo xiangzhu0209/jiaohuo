@@ -61,6 +61,11 @@ export interface OrderItem {
   quantity: number;
   unitPrice: number;
   notes: string;
+  /**
+   * 明細在這張單子裡的顯示順序（0 起算）。舊資料沒有這個欄位，會沿用讀取
+   * 順序（舊單的文件編號本身帶有 i001、i002… 的原始順序）。
+   */
+  sortOrder?: number;
   createdAt: string;
 }
 
@@ -103,4 +108,6 @@ export interface ItemInsert {
   quantity: number;
   unitPrice: number;
   notes: string;
+  /** 顯示順序，由表單送出時的排列決定（舊資料可能沒有）。 */
+  sortOrder?: number;
 }
