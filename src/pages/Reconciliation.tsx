@@ -71,6 +71,13 @@ export default function Reconciliation() {
         });
       }
     }
+    // 展開的明細依日期排序（同一天再依單號），對帳時才能一筆一筆照日期核對
+    for (const g of map.values()) {
+      g.rows.sort(
+        (a, b) =>
+          a.orderDate.localeCompare(b.orderDate) || a.orderNo.localeCompare(b.orderNo),
+      );
+    }
     return [...map.values()]
       .map((g) => ({
         ...g,
