@@ -20,11 +20,22 @@ interface Group {
   rows: OrderItem[];
   totalQty: number;
   priceLabel: string;
+  /** 這個品項本月最早叫貨的日期，用來做日期排序 */
+  firstDate: string;
 }
+
+type SortKey = "date-asc" | "date-desc" | "vendor";
+
+const SORT_LABELS: Record<SortKey, string> = {
+  "date-asc": "日期：由早到晚",
+  "date-desc": "日期：由晚到早",
+  vendor: "廠商／色號",
+};
 
 export default function Reconciliation() {
   const [month, setMonth] = useState(currentMonth());
   const [vendorId, setVendorId] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<SortKey>("date-asc");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const range = monthRange(month);
@@ -68,16 +79,26 @@ export default function Reconciliation() {
           rows: [row],
           totalQty: toNum(row.quantity),
           priceLabel: "",
+          firstDate: row.orderDate ?? "",
         });
       }
     }
-    // 展開的明細依日期排序（同一天再依單號），對帳時才能一筆一筆照日期核對
+    // 每一組的明細依選定的方向排序（同一天再依單號），對帳時才能照日期逐筆核對
+    const dir = sortBy === "date-desc" ? -1 : 1;
     for (const g of map.values()) {
       g.rows.sort(
         (a, b) =>
-          a.orderDate.localeCompare(b.orderDate) || a.orderNo.localeCompare(b.orderNo),
+          dir *
+          (a.orderDate.localeCompare(b.orderDate) ||
+            a.orderNo.localeCompare(b.orderNo)),
+      );
+      g.firstDate = g.rows.reduce(
+        (min, r) => (r.orderDate && r.orderDate < min ? r.orderDate : min),
+        g.rows[0].orderDate ?? "",
       );
     }
+    const byVendor = (a: Group, b: Group) =>
+      `${a.vendorName}${a.productName}`.localeCompare(`${b.vendorName}${b.productName}`);
     return [...map.values()]
       .map((g) => ({
         ...g,
@@ -86,10 +107,13 @@ export default function Reconciliation() {
           .map(fmtMoney)
           .join(" / "),
       }))
-      .sort((a, b) =>
-        `${a.vendorName}${a.productName}`.localeCompare(`${b.vendorName}${b.productName}`),
-      );
-  }, [monthItems]);
+      .sort((a, b) => {
+        if (sortBy === "vendor") return byVendor(a, b);
+        const byDate = a.firstDate.localeCompare(b.firstDate);
+        // 日期相同時，仍依廠商／色號排，順序才不會跳來跳去
+        return (byDate !== 0 ? dir * byDate : 0) || byVendor(a, b);
+      });
+  }, [monthItems, sortBy]);
 
   const totalQty = groups.reduce((s, g) => s + g.totalQty, 0);
   const vendorName = vendors.find((v) => v.id === vendorId)?.name ?? "全部廠商";
@@ -114,14 +138,14 @@ export default function Reconciliation() {
             <div className="flex flex-col gap-1">
               <CardTitle className="text-base">對帳統計</CardTitle>
               <CardDescription>
-                {month} · {vendorName}
+                {month} · {vendorName} · {SORT_LABELS[sortBy]}
               </CardDescription>
             </div>
             <span className="inline-flex items-center rounded-full border border-gold/40 bg-gold/15 px-2.5 py-0.5 text-xs font-medium text-gold-text">
               共 {groups.length} 項・總數量 {totalQty}
             </span>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Input type="month" value={month} onChange={(e) => setMonth(e.target.value || currentMonth())} />
             <Select value={vendorId} onValueChange={setVendorId}>
               <SelectTrigger>
@@ -132,6 +156,18 @@ export default function Reconciliation() {
                 {vendors.map((v) => (
                   <SelectItem key={v.id} value={v.id}>
                     {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {SORT_LABELS[k]}
                   </SelectItem>
                 ))}
               </SelectContent>
