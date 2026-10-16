@@ -66,6 +66,8 @@ export interface OrderItem {
    * 順序（舊單的文件編號本身帶有 i001、i002… 的原始順序）。
    */
   sortOrder?: number;
+  /** 月對帳用：這一筆是否已跟廠商結清（已算進帳單）。未設定＝未結清。 */
+  settled?: boolean;
   createdAt: string;
 }
 
