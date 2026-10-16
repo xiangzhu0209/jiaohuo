@@ -48,6 +48,9 @@ export const replaceOrderItems: typeof remote.replaceOrderItems = (...a) =>
 export const deleteOrder: typeof remote.deleteOrder = (...a) =>
   isOfflineMode() ? local.deleteOrder(...a) : remote.deleteOrder(...a);
 
+export const setItemsSettled: typeof remote.setItemsSettled = (...a) =>
+  isOfflineMode() ? local.setItemsSettled(...a) : remote.setItemsSettled(...a);
+
 export const updateOrderStatus: typeof remote.updateOrderStatus = (...a) =>
   isOfflineMode() ? local.updateOrderStatus(...a) : remote.updateOrderStatus(...a);
 
