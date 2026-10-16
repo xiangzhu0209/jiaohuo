@@ -193,6 +193,19 @@ export async function replaceOrderItems(orderId: string, items: ItemInsert[]): P
   write(store);
 }
 
+/** 批次設定明細的「已結清」狀態（月對帳的勾選）。 */
+export async function setItemsSettled(
+  updates: { id: string; settled: boolean }[],
+): Promise<void> {
+  const store = read();
+  const byId = new Map(updates.map((u) => [u.id, u.settled]));
+  for (const it of store.items) {
+    const settled = byId.get(it.id);
+    if (settled !== undefined) it.settled = settled;
+  }
+  write(store);
+}
+
 export async function deleteOrder(id: string): Promise<void> {
   const store = read();
   store.orders = store.orders.filter((o) => o.id !== id);
