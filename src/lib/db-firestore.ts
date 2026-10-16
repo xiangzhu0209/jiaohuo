@@ -102,8 +102,13 @@ const mapItem = (id: string, d: DocumentData): OrderItem => ({
   notes: str(d.notes),
   // 舊資料沒有 sortOrder：留 undefined，排序時再依讀取順序處理
   sortOrder: typeof d.sortOrder === "number" ? d.sortOrder : undefined,
+  settled: d.settled === true,
   createdAt: str(d.createdAt),
 });
+
+/** 同一張單內辨識一筆明細的鍵（色號＋尺寸＋規格）。 */
+const itemLineKey = (v: { productName: string; size: string; spec: string }): string =>
+  JSON.stringify([v.productName ?? "", v.size ?? "", v.spec ?? ""]);
 
 /** 依序把多個寫入動作分成安全大小的批次送出。 */
 async function commitChunked(actions: ((batch: WriteBatch) => void)[]): Promise<void> {
@@ -215,6 +220,13 @@ export async function replaceOrderItems(orderId: string, items: ItemInsert[]): P
   const existing = await getDocs(query(collection(db, COL.items), where("orderId", "==", orderId)));
   const now = new Date().toISOString();
 
+  // 已結清的記號要跟著「同一筆明細」留下來，不能因為編輯訂單就被清掉
+  const settledKeys = new Set<string>();
+  for (const d of existing.docs) {
+    const cur = mapItem(d.id, d.data());
+    if (cur.settled) settledKeys.add(itemLineKey(cur));
+  }
+
   const actions: ((batch: WriteBatch) => void)[] = [
     ...existing.docs.map((d) => (batch: WriteBatch) => batch.delete(d.ref)),
     ...items.map((it) => (batch: WriteBatch) =>
@@ -234,11 +246,25 @@ export async function replaceOrderItems(orderId: string, items: ItemInsert[]): P
         notes: it.notes ?? "",
         // 沒有順序（舊表單）時給 0：讀取端一致，行為與以往相同
         sortOrder: it.sortOrder ?? 0,
+        settled: settledKeys.has(itemLineKey(it)),
         createdAt: now,
       }),
     ),
   ];
   await commitChunked(actions);
+}
+
+/** 批次設定明細的「已結清」狀態（月對帳的勾選）。 */
+export async function setItemsSettled(
+  updates: { id: string; settled: boolean }[],
+): Promise<void> {
+  if (updates.length === 0) return;
+  await commitChunked(
+    updates.map(
+      (u) => (batch: WriteBatch) =>
+        batch.update(doc(db, COL.items, u.id), { settled: u.settled }),
+    ),
+  );
 }
 
 /** 刪除訂單（Firestore 沒有串聯刪除，明細要一起刪）。 */
