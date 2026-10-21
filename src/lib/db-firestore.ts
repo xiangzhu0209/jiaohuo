@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type {
+  EmphasisMark,
   ItemInsert,
   NewOrderPayload,
   Order,
@@ -103,6 +104,7 @@ const mapItem = (id: string, d: DocumentData): OrderItem => ({
   // 舊資料沒有 sortOrder：留 undefined，排序時再依讀取順序處理
   sortOrder: typeof d.sortOrder === "number" ? d.sortOrder : undefined,
   settled: d.settled === true,
+  emphasis: Array.isArray(d.emphasis) ? (d.emphasis as EmphasisMark[]) : undefined,
   createdAt: str(d.createdAt),
 });
 
@@ -247,6 +249,7 @@ export async function replaceOrderItems(orderId: string, items: ItemInsert[]): P
         // 沒有順序（舊表單）時給 0：讀取端一致，行為與以往相同
         sortOrder: it.sortOrder ?? 0,
         settled: settledKeys.has(itemLineKey(it)),
+        ...(it.emphasis && it.emphasis.length > 0 ? { emphasis: it.emphasis } : {}),
         createdAt: now,
       }),
     ),
@@ -265,6 +268,14 @@ export async function setItemsSettled(
         batch.update(doc(db, COL.items, u.id), { settled: u.settled }),
     ),
   );
+}
+
+/** 更新某一筆明細的重點字標記（列印頁直接標註用）。 */
+export async function setItemEmphasis(
+  itemId: string,
+  emphasis: EmphasisMark[],
+): Promise<void> {
+  await updateDoc(doc(db, COL.items, itemId), { emphasis });
 }
 
 /** 刪除訂單（Firestore 沒有串聯刪除，明細要一起刪）。 */
