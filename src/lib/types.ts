@@ -40,6 +40,23 @@ export interface Order {
   updatedAt: string;
 }
 
+/** 可被強調（紅字／加粗）的明細欄位。 */
+export type EmphasisField = "productName" | "size" | "usage" | "spec" | "notes";
+
+/**
+ * 一段被強調的文字：只記「欄位＋字元範圍」（start 含、end 不含），
+ * 不會把記號寫進文字內容，對帳統計與自動帶價都不受影響。
+ */
+export interface EmphasisMark {
+  field: EmphasisField;
+  start: number;
+  end: number;
+  /** 列印時印成紅字 */
+  red?: boolean;
+  /** 列印時加粗 */
+  bold?: boolean;
+}
+
 /**
  * Order item. Order-level fields (orderNo / orderDate / customerName /
  * vendorName) are denormalized onto each item so lists, printing and
@@ -68,6 +85,8 @@ export interface OrderItem {
   sortOrder?: number;
   /** 月對帳用：這一筆是否已跟廠商結清（已算進帳單）。未設定＝未結清。 */
   settled?: boolean;
+  /** 列印時要特別標出來的重點字（廠商容易看走眼的地方）。 */
+  emphasis?: EmphasisMark[];
   createdAt: string;
 }
 
@@ -81,6 +100,8 @@ export interface OrderItemDraft {
   quantity: string;
   unit_price: string;
   notes: string;
+  /** 列印時要特別標出來的重點字 */
+  emphasis?: EmphasisMark[];
 }
 
 /** 建立訂單時要寫入的欄位。 */
@@ -112,4 +133,6 @@ export interface ItemInsert {
   notes: string;
   /** 顯示順序，由表單送出時的排列決定（舊資料可能沒有）。 */
   sortOrder?: number;
+  /** 列印時要特別標出來的重點字 */
+  emphasis?: EmphasisMark[];
 }
