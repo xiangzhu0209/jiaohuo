@@ -1,5 +1,5 @@
 import { generateOrderNo } from "./order-utils";
-import type { Order, OrderItem, PriceItem, Vendor } from "./types";
+import type { EmphasisMark, Order, OrderItem, PriceItem, Vendor } from "./types";
 import type { ItemInsert, NewOrderPayload } from "./types";
 
 /**
@@ -187,6 +187,7 @@ export async function replaceOrderItems(orderId: string, items: ItemInsert[]): P
       quantity: it.quantity,
       unitPrice: it.unitPrice,
       notes: it.notes ?? "",
+      ...(it.emphasis && it.emphasis.length > 0 ? { emphasis: it.emphasis } : {}),
       createdAt: now,
     });
   }
@@ -203,6 +204,19 @@ export async function setItemsSettled(
     const settled = byId.get(it.id);
     if (settled !== undefined) it.settled = settled;
   }
+  write(store);
+}
+
+/** 更新某一筆明細的重點字標記（列印頁直接標註用）。 */
+export async function setItemEmphasis(
+  itemId: string,
+  emphasis: EmphasisMark[],
+): Promise<void> {
+  const store = read();
+  const item = store.items.find((i) => i.id === itemId);
+  if (!item) return;
+  if (emphasis.length > 0) item.emphasis = emphasis;
+  else delete item.emphasis;
   write(store);
 }
 
