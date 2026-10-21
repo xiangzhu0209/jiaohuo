@@ -29,7 +29,7 @@ import {
   upsertPrices,
   type ItemInsert,
 } from "@/lib/db";
-import type { OrderItem, OrderItemDraft, PriceItem } from "@/lib/types";
+import type { EmphasisField, EmphasisMark, OrderItem, OrderItemDraft, PriceItem } from "@/lib/types";
 import { fmtMoney, STATUS_LABELS, toNum } from "@/lib/order-utils";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -49,6 +49,25 @@ interface VendorSection {
   note: string;
   sameColor: boolean;
 }
+
+/** 表單欄位名稱 -> 明細欄位名稱（強調記號以明細的欄位名儲存）。 */
+const EMPHASIS_FIELDS: Record<string, EmphasisField> = {
+  product_name: "productName",
+  size: "size",
+  usage: "usage",
+  spec: "spec",
+  notes: "notes",
+};
+
+/** 文字被編輯時，把該欄位舊的強調記號丟掉，免得標到錯的位置。 */
+const dropEmphasis = (
+  marks: EmphasisMark[] | undefined,
+  fields: EmphasisField[],
+): EmphasisMark[] | undefined => {
+  if (!marks || marks.length === 0) return undefined;
+  const kept = marks.filter((m) => !fields.includes(m.field));
+  return kept.length > 0 ? kept : undefined;
+};
 
 const newDraft = (): OrderItemDraft => ({
   key: crypto.randomUUID(),
@@ -164,6 +183,7 @@ export default function OrderForm() {
           quantity: String(it.quantity),
           unit_price: String(it.unitPrice),
           notes: it.notes ?? "",
+          emphasis: it.emphasis && it.emphasis.length > 0 ? it.emphasis : undefined,
         });
         groups.set(key, list);
       }
@@ -228,6 +248,7 @@ export default function OrderForm() {
             notes: r.notes.trim(),
             // 依表單上的排列順序記錄，確保下次打開、列印時順序完全相同
             sortOrder: items.length,
+            emphasis: r.emphasis && r.emphasis.length > 0 ? r.emphasis : undefined,
           });
         }
       }
@@ -251,7 +272,14 @@ export default function OrderForm() {
     );
   };
 
+  /**
+   * 重點字（紅字／加粗）在「列印」頁面上用滑鼠選字標記，這裡只保留記號；
+   * 明細文字被改動的欄位，其記號一併清掉，免得標到不對的位置。
+   */
   const updateItem = (sectionIndex: number, key: string, patch: Partial<OrderItemDraft>) => {
+    const edited = Object.keys(patch)
+      .map((k) => EMPHASIS_FIELDS[k])
+      .filter((f): f is EmphasisField => f !== undefined);
     setSections((prev) =>
       prev.map((s, i) => {
         if (i !== sectionIndex) return s;
@@ -260,13 +288,15 @@ export default function OrderForm() {
         const syncColor = s.sameColor && color !== "";
         return {
           ...s,
-          rows: s.rows.map((r) =>
-            syncColor
-              ? { ...r, ...patch, product_name: color }
-              : r.key === key
-                ? { ...r, ...patch }
-                : r,
-          ),
+          rows: s.rows.map((r) => {
+            if (!syncColor && r.key !== key) return r;
+            return {
+              ...r,
+              ...patch,
+              ...(syncColor ? { product_name: color } : {}),
+              emphasis: dropEmphasis(r.emphasis, edited),
+            };
+          }),
         };
       }),
     );
@@ -280,6 +310,10 @@ export default function OrderForm() {
     );
   };
 
+  /**
+   * 重點字（紅字／加粗）是在「列印」頁面上用滑鼠選字標記的，這裡只負責把記號留著：
+   * 明細文字被改動的欄位，其記號一併清掉，免得標到不對的位置。
+   */
   const removeSection = (sectionIndex: number) => {
     setSections((prev) => prev.filter((_, i) => i !== sectionIndex));
   };
@@ -638,8 +672,8 @@ export default function OrderForm() {
                       </p>
                     ) : (
                       <div className="overflow-x-auto">
-                        <div className="min-w-[780px]">
-                          <div className="grid grid-cols-[1.25rem_1.5rem_1.4fr_1fr_0.8fr_1fr_0.6fr_0.8fr_1fr_2rem] gap-2 border-b border-border/70 pb-2 text-xs font-semibold tracking-wide text-muted-foreground">
+                        <div className="min-w-[1000px]">
+                          <div className="grid grid-cols-[1.25rem_1.5rem_1.4fr_1fr_0.8fr_1fr_0.6fr_0.8fr_1fr_5.2rem_2rem] gap-2 border-b border-border/70 pb-2 text-xs font-semibold tracking-wide text-muted-foreground">
                             <span />
                             <span />
                             <span>色號</span>
@@ -649,6 +683,9 @@ export default function OrderForm() {
                             <span className="text-right">數量</span>
                             <span className="text-right">單價</span>
                             <span>備註</span>
+                            <span title="重點字請在儲存後的「列印」頁面用滑鼠選字標記" className="text-center">
+                              重點字
+                            </span>
                             <span />
                           </div>
                           {sec.rows.map((it, ri) => (
@@ -669,7 +706,7 @@ export default function OrderForm() {
                                 setDropKey(null);
                               }}
                               className={cn(
-                                "grid grid-cols-[1.25rem_1.5rem_1.4fr_1fr_0.8fr_1fr_0.6fr_0.8fr_1fr_2rem] items-center gap-2 border-b border-border/60 py-2 transition-colors last:border-b-0 hover:bg-muted/40",
+                                "grid grid-cols-[1.25rem_1.5rem_1.4fr_1fr_0.8fr_1fr_0.6fr_0.8fr_1fr_5.2rem_2rem] items-center gap-2 border-b border-border/60 py-2 transition-colors last:border-b-0 hover:bg-muted/40",
                                 dragging?.key === it.key && "opacity-40",
                                 dropKey === it.key && dragging?.key !== it.key && "bg-accent/60",
                               )}
@@ -758,6 +795,18 @@ export default function OrderForm() {
                                 onChange={(e) => updateItem(si, it.key, { notes: e.target.value })}
                                 placeholder="備註"
                               />
+                              <div className="flex items-center justify-center">
+                                {(it.emphasis?.length ?? 0) > 0 ? (
+                                  <span
+                                    className="text-xs text-destructive"
+                                    title="這列在列印頁有標重點字"
+                                  >
+                                    已標 {it.emphasis?.length} 處
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </div>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -798,7 +847,9 @@ export default function OrderForm() {
                 </Button>
                 <p className="text-sm text-muted-foreground">
                   共 {sections.reduce((n, s) => n + s.rows.filter((r) => r.product_name.trim() !== "").length, 0)} 筆明細
-                  <span className="ml-1">（用左側把手拖曳，或用箭頭調整順序）</span>
+                  <span className="ml-1">
+                    （拖把手或箭頭調順序；重點字的紅字／加粗請在儲存後的列印頁面用滑鼠選字標記）
+                  </span>
                 </p>
               </div>
             </div>
