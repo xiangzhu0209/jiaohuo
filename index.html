@@ -4,14 +4,33 @@
 <head>
   <meta charset="UTF-8" />
   <link href="./favicon.ico" rel="icon shortcut">
+  <link href="./icon-192.png" rel="apple-touch-icon">
+  <link href="./manifest.webmanifest" rel="manifest">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="叫貨單" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+HK:wght@200..900&display=swap"
     rel="stylesheet">
-  <title>叫貨單系統</title>
-  <meta name="description" content="窗簾、軌道叫貨單管理系統" />
+  <title>訂貨系統</title>
+  <meta name="description" content="訂貨單管理系統" />
   <meta name="theme-color" content="#0f2e26" />
+  <script>
+    /*
+     * 註冊離線快取：讓「加到手機桌面」的 App 在沒訊號時也開得起來。
+     * 只在 https（正式站）且非本機開發時註冊，開發預覽不受影響。
+     */
+    (function () {
+      var isLocal = /^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(location.hostname);
+      if (!("serviceWorker" in navigator) || location.protocol !== "https:" || isLocal) return;
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("./sw.js").catch(function () {});
+      });
+    })();
+  </script>
 </head>
 
 <body>
