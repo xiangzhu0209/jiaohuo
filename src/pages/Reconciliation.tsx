@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calculator, ChevronDown, Printer } from "lucide-react";
+import { Calculator, ChevronDown, FileSpreadsheet, Printer, Table2 } from "lucide-react";
 import { fetchAllOrderItems, fetchVendors, setItemsSettled } from "@/lib/db";
 import type { OrderItem } from "@/lib/types";
 import { currentMonth, fmtMoney, monthRange, toNum } from "@/lib/order-utils";
+import { downloadCsv, type CsvRow } from "@/lib/export-csv";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -43,6 +44,14 @@ const STATUS_LABELS: Record<StatusKey, string> = {
 
 /** 列印用的結清欄位：已結清打勾，未結清留空框好讓人在紙上畫記。 */
 const settleMark = (settled: boolean): string => (settled ? "✓" : "□");
+
+/** 匯出用的結清狀態文字（給會計看，比符號清楚）。 */
+const groupStatus = (group: Group, isSettled: (it: OrderItem) => boolean): string => {
+  const done = group.rows.filter(isSettled).length;
+  if (done === group.rows.length) return "已結清";
+  if (done === 0) return "未結清";
+  return `部分結清 ${done}/${group.rows.length}`;
+};
 
 export default function Reconciliation() {
   const qc = useQueryClient();
@@ -178,6 +187,64 @@ export default function Reconciliation() {
   ).length;
   const vendorName = vendors.find((v) => v.id === vendorId)?.name ?? "全部廠商";
 
+  const totalAmount = useMemo(
+    () =>
+      visibleGroups.reduce(
+        (sum, g) => sum + g.rows.reduce((s, r) => s + toNum(r.quantity) * toNum(r.unitPrice), 0),
+        0,
+      ),
+    [visibleGroups],
+  );
+
+  /**
+   * 匯出「統計表」：跟畫面上一樣的品項彙總（廠商／色號／尺寸／規格＋數量合計）。
+   * 只匯出目前篩選出來、看得到的項目。
+   */
+  const exportSummary = () => {
+    const rows: CsvRow[] = [
+      ["結清", "廠商", "色號", "尺寸", "規格", "數量合計", "單價", "明細筆數"],
+      ...visibleGroups.map((g) => [
+        groupStatus(g, isSettled),
+        g.vendorName,
+        g.productName,
+        g.size,
+        g.spec,
+        g.totalQty,
+        g.priceLabel,
+        g.rows.length,
+      ]),
+      ["總計", "", "", "", "", totalQty, "", visibleGroups.length],
+    ];
+    downloadCsv(`月對帳_${month}_${vendorName}_統計表.csv`, rows);
+    toast(`已匯出統計表：${visibleGroups.length} 項・數量合計 ${totalQty}`);
+  };
+
+  /** 匯出「明細」：每一筆叫貨（日期／單號／客戶）都列出，方便逐筆核對。 */
+  const exportDetail = () => {
+    const rows: CsvRow[] = [
+      ["結清", "日期", "單號", "客戶", "廠商", "色號", "尺寸", "用量", "規格", "數量", "單價", "小計"],
+      ...visibleGroups.flatMap((g) =>
+        g.rows.map((r) => [
+          isSettled(r) ? "已結清" : "未結清",
+          r.orderDate,
+          r.orderNo,
+          r.customerName,
+          r.vendorName || g.vendorName,
+          r.productName,
+          r.size,
+          r.usage,
+          r.spec,
+          toNum(r.quantity),
+          toNum(r.unitPrice),
+          toNum(r.quantity) * toNum(r.unitPrice),
+        ]),
+      ),
+      ["總計", "", "", "", "", "", "", "", "", totalQty, "", totalAmount],
+    ];
+    downloadCsv(`月對帳_${month}_${vendorName}_明細.csv`, rows);
+    toast(`已匯出明細：共 ${visibleGroups.reduce((n, g) => n + g.rows.length, 0)} 筆`);
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="print-hidden flex flex-wrap items-center justify-between gap-4">
@@ -187,9 +254,26 @@ export default function Reconciliation() {
             依品項統計每月向廠商叫貨的數量與單價，並記錄是否已結清
           </p>
         </div>
-        <Button variant="outline" onClick={() => window.print()}>
-          <Printer className="size-4" /> 列印對帳單
-        </Button>
+        <div className="flex flex-col items-start gap-1.5 sm:items-end">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              disabled={visibleGroups.length === 0}
+              onClick={exportSummary}
+            >
+              <FileSpreadsheet className="size-4" /> 匯出統計表
+            </Button>
+            <Button variant="outline" disabled={visibleGroups.length === 0} onClick={exportDetail}>
+              <Table2 className="size-4" /> 匯出明細
+            </Button>
+            <Button variant="outline" onClick={() => window.print()}>
+              <Printer className="size-4" /> 列印對帳單
+            </Button>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            匯出成 .csv，可直接用 Excel 開啟；內容就是目前篩選出來的項目
+          </span>
+        </div>
       </div>
 
       <Card>
