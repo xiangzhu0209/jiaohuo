@@ -9,10 +9,10 @@ import {
   updateOrderStatus,
 } from "@/lib/db";
 import type { EmphasisField, EmphasisMark, OrderItem } from "@/lib/types";
+import { downloadSheetPng } from "@/lib/order-utils";
 import { useAuth } from "@/hooks/use-auth";
 import OrderSheet from "@/components/order/order-sheet";
 import OrderSheets from "@/components/order/order-sheets";
-import { downloadSheetPng } from "@/lib/export-image";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
