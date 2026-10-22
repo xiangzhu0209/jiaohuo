@@ -208,7 +208,13 @@ export default function OrderSheet({
                   <td className={cell()} data-field="spec" data-item-id={it.id}>
                     {it.spec ? emphasized(it.spec, marks("spec"), `${it.id}-spec`) : "—"}
                   </td>
-                  <td className={cell("whitespace-nowrap text-right tabular-nums")}>{it.quantity}</td>
+                  <td
+                    className={cell("whitespace-nowrap text-right tabular-nums")}
+                    data-field="quantity"
+                    data-item-id={it.id}
+                  >
+                    {emphasized(String(it.quantity), marks("quantity"), `${it.id}-qty`)}
+                  </td>
                   <td className={cell("whitespace-nowrap text-right tabular-nums")}>
                     {fmtMoney(toNum(it.unitPrice))}
                   </td>

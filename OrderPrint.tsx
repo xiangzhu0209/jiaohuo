@@ -9,10 +9,10 @@ import {
   updateOrderStatus,
 } from "@/lib/db";
 import type { EmphasisField, EmphasisMark, OrderItem } from "@/lib/types";
+import { collectEmphasisHits, downloadSheetPng } from "@/lib/order-utils";
 import { useAuth } from "@/hooks/use-auth";
 import OrderSheet from "@/components/order/order-sheet";
 import OrderSheets from "@/components/order/order-sheets";
-import { downloadSheetPng } from "@/lib/export-image";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -81,14 +81,18 @@ export default function OrderPrint() {
   });
 
   const saveEmphasis = useMutation({
-    mutationFn: ({ itemId, emphasis }: { itemId: string; emphasis: EmphasisMark[] }) =>
-      setItemEmphasis(itemId, emphasis),
+    // 一次可以同時改好幾筆明細（跨欄、跨列選取時）
+    mutationFn: (updates: { itemId: string; emphasis: EmphasisMark[] }[]) =>
+      Promise.all(updates.map((u) => setItemEmphasis(u.itemId, u.emphasis))).then(() => undefined),
     // 先更新畫面（馬上看到紅字／粗體），再寫回雲端
-    onMutate: async ({ itemId, emphasis }) => {
+    onMutate: async (updates) => {
       await qc.cancelQueries({ queryKey: itemsKey });
       const previous = qc.getQueryData<OrderItem[]>(itemsKey);
+      const changed = new Map(updates.map((u) => [u.itemId, u.emphasis]));
       qc.setQueryData<OrderItem[]>(itemsKey, (old) =>
-        (old ?? []).map((it) => (it.id === itemId ? { ...it, emphasis } : it)),
+        (old ?? []).map((it) =>
+          changed.has(it.id) ? { ...it, emphasis: changed.get(it.id) ?? [] } : it,
+        ),
       );
       return { previous };
     },
@@ -101,63 +105,94 @@ export default function OrderPrint() {
     },
   });
 
-  /** 從畫面上的選取範圍，找出「哪一筆明細的哪個欄位、第幾個字到第幾個字」。 */
+  /**
+   * 找出選取範圍碰到「哪些格子」的「哪幾個字」。
+   * 可以跨欄、跨列（整列一次標），只要格子有 data-field 就會被算進來。
+   */
   const readSelection = (): {
     item: OrderItem;
     field: EmphasisField;
     start: number;
     end: number;
-  } | null => {
+  }[] => {
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return [];
     const range = sel.getRangeAt(0);
-    const cellOf = (node: Node | null): HTMLElement | null => {
-      const el = node?.nodeType === Node.TEXT_NODE ? node.parentElement : (node as HTMLElement | null);
-      return (el?.closest?.("[data-field][data-item-id]") as HTMLElement | null) ?? null;
-    };
-    const cell = cellOf(range.startContainer);
-    // 只能標同一格裡的文字
-    if (!cell || cell !== cellOf(range.endContainer)) return null;
-    const field = cell.dataset.field as EmphasisField | undefined;
-    const item = items.find((it) => it.id === cell.dataset.itemId);
-    if (!field || !item) return null;
-    const offsetOf = (node: Node, offset: number) => {
-      const before = range.cloneRange();
-      before.selectNodeContents(cell);
-      before.setEnd(node, offset);
-      return before.toString().length;
-    };
-    const start = offsetOf(range.startContainer, range.startOffset);
-    const end = offsetOf(range.endContainer, range.endOffset);
-    return end > start ? { item, field, start, end } : null;
+    const root = sheetAreaRef.current;
+    if (!root || !range.intersectsNode(root)) return [];
+
+    const hits: { item: OrderItem; field: EmphasisField; start: number; end: number }[] = [];
+    for (const hit of collectEmphasisHits(range, root)) {
+      const item = items.find((it) => it.id === hit.itemId);
+      if (item) hits.push({ item, field: hit.field, start: hit.start, end: hit.end });
+    }
+    return hits;
   };
 
   /** 把選取到的文字加上（或取消）紅字／加粗，存檔後畫面立即更新。 */
   const markSelection = (attr: "red" | "bold" | "clear") => {
-    const hit = readSelection();
-    if (!hit) {
-      toast("請先在單子上用滑鼠選取要強調的文字（同一格內）");
+    const hits = readSelection();
+    if (hits.length === 0) {
+      toast("請先在單子上用滑鼠選取要強調的文字");
       return;
     }
-    const { item, field, start, end } = hit;
-    const marks = item.emphasis ?? [];
-    let next: EmphasisMark[];
-    if (attr === "clear") {
-      next = marks.filter((m) => m.field !== field || m.end <= start || m.start >= end);
-    } else {
-      const same = marks.find(
-        (m) => m.field === field && m.start === start && m.end === end && m[attr],
-      );
-      const rest = marks.filter(
-        (m) => m.field !== field || m[attr] !== true || m.end <= start || m.start >= end,
-      );
-      next = same ? rest : [...rest, { field, start, end, [attr]: true }];
+
+    // 同一筆明細的同一個欄位可能被選到好幾段，先合併起來
+    const groups = new Map<
+      string,
+      { item: OrderItem; field: EmphasisField; ranges: { start: number; end: number }[] }
+    >();
+    for (const hit of hits) {
+      const key = `${hit.item.id}||${hit.field}`;
+      const group = groups.get(key);
+      if (group) {
+        group.ranges.push({ start: hit.start, end: hit.end });
+      } else {
+        groups.set(key, {
+          item: hit.item,
+          field: hit.field,
+          ranges: [{ start: hit.start, end: hit.end }],
+        });
+      }
     }
-    saveEmphasis.mutate({ itemId: item.id, emphasis: next });
+
+    const updates: { itemId: string; emphasis: EmphasisMark[] }[] = [];
+    for (const { item, field, ranges } of groups.values()) {
+      const marks = item.emphasis ?? [];
+      const touched = (r: { start: number; end: number }) => (m: EmphasisMark) =>
+        m.field === field && m.end > r.start && m.start < r.end;
+      let next: EmphasisMark[];
+      if (attr === "clear") {
+        next = marks.filter((m) => !ranges.some((r) => touched(r)(m)));
+      } else {
+        // 整段都已經有這個效果 → 當作「取消」；否則全部加上
+        const covered = ranges.every((r) =>
+          marks.some(
+            (m) => m.field === field && m[attr] === true && m.start <= r.start && m.end >= r.end,
+          ),
+        );
+        if (covered) {
+          next = marks.filter(
+            (m) => m.field !== field || m[attr] !== true || ranges.every((r) => touched(r)(m) === false),
+          );
+        } else {
+          next = [
+            ...marks,
+            ...ranges.map((r) =>
+              attr === "red"
+                ? ({ field, start: r.start, end: r.end, red: true } as EmphasisMark)
+                : ({ field, start: r.start, end: r.end, bold: true } as EmphasisMark),
+            ),
+          ];
+        }
+      }
+      updates.push({ itemId: item.id, emphasis: next });
+    }
+
+    saveEmphasis.mutate(updates);
     window.getSelection()?.removeAllRanges();
-    toast(
-      attr === "clear" ? "已取消這段強調" : attr === "red" ? "已標成紅字" : "已標成粗體",
-    );
+    const label = attr === "clear" ? "已取消" : attr === "red" ? "已標成紅字" : "已標成粗體";
+    toast(updates.length > 1 ? `${label}（${updates.length} 處）` : label);
   };
 
   /** 依廠商把明細分組（順序同單子上的排列），供「各廠商各一張圖」使用。 */
@@ -312,7 +347,7 @@ export default function OrderPrint() {
             <Eraser className="size-3.5" /> 清除
           </Button>
           <span className="text-xs text-muted-foreground">
-            用滑鼠在單子上選取要強調的字，再按上面的鈕（會馬上存檔、馬上看到效果）
+            用滑鼠在單子上選取要強調的字（可以跨欄、整列一次選），再按上面的鈕（馬上存檔）
           </span>
         </div>
       </div>
