@@ -1,3 +1,5 @@
+import type { EmphasisField, EmphasisMark } from "./types";
+
 export const toNum = (v: string | number | null | undefined): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -51,6 +53,116 @@ export const currentMonth = (): string => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 };
+
+/* ============================================================
+   紙張上的重點字：把選取範圍換算成「哪一筆的哪個欄位、第幾個字到第幾個字」
+   ============================================================ */
+
+export interface EmphasisHit {
+  itemId: string;
+  field: EmphasisField;
+  start: number;
+  end: number;
+}
+
+/**
+ * 找出選取範圍碰到哪些可標記的格子（可以跨欄、跨列），
+ * 並把選取的起點／終點換算成該格的字元範圍（超出格子就貼齊頭尾）。
+ */
+export function collectEmphasisHits(range: Range, root: HTMLElement): EmphasisHit[] {
+  const hits: EmphasisHit[] = [];
+  const cells = [...root.querySelectorAll<HTMLElement>("[data-field][data-item-id]")];
+  for (const cell of cells) {
+    if (!range.intersectsNode(cell)) continue;
+    const field = cell.dataset.field as EmphasisField | undefined;
+    const itemId = cell.dataset.itemId;
+    if (!field || !itemId) continue;
+    const length = (cell.textContent ?? "").length;
+    if (length === 0) continue;
+    const offsetOf = (node: Node, offset: number) => {
+      const before = range.cloneRange();
+      before.selectNodeContents(cell);
+      before.setEnd(node, offset);
+      return Math.min(length, Math.max(0, before.toString().length));
+    };
+    const start = offsetOf(range.startContainer, range.startOffset);
+    const end = offsetOf(range.endContainer, range.endOffset);
+    if (end > start) hits.push({ itemId, field, start, end });
+  }
+  return hits;
+}
+
+/**
+ * 把「同一個欄位的幾個字元範圍」加上／取消某種效果，回傳新的記號陣列。
+ * 純函式：同一筆明細的多個欄位要依序套用，最後才寫回一次（避免互相覆蓋）。
+ */
+export function applyEmphasis(
+  marks: EmphasisMark[],
+  field: EmphasisField,
+  ranges: { start: number; end: number }[],
+  attr: "red" | "bold" | "clear",
+): EmphasisMark[] {
+  const overlaps = (r: { start: number; end: number }) => (m: EmphasisMark) =>
+    m.field === field && m.end > r.start && m.start < r.end;
+
+  if (attr === "clear") {
+    return marks.filter((m) => !ranges.some((r) => overlaps(r)(m)));
+  }
+
+  // 選到的每一段都已經有這個效果 → 當作「取消」
+  const covered = ranges.every((r) =>
+    marks.some(
+      (m) => m.field === field && m[attr] === true && m.start <= r.start && m.end >= r.end,
+    ),
+  );
+  if (covered) {
+    return marks.filter(
+      (m) => m.field !== field || m[attr] !== true || !ranges.some((r) => overlaps(r)(m)),
+    );
+  }
+
+  return [
+    ...marks,
+    ...ranges.map((r) =>
+      attr === "red"
+        ? ({ field, start: r.start, end: r.end, red: true } as EmphasisMark)
+        : ({ field, start: r.start, end: r.end, bold: true } as EmphasisMark),
+    ),
+  ];
+}
+
+/**
+ * 依選取結果算出「每一筆明細的新記號」。
+ * 同一筆明細只會產生「一筆更新」——跨欄選取時若逐欄各寫一次，
+ * 同一筆會被寫好幾次、後面的把前面的覆蓋掉（畫面就只變一格）。
+ */
+export function emphasisUpdates(
+  hits: EmphasisHit[],
+  currentMarks: (itemId: string) => EmphasisMark[],
+  attr: "red" | "bold" | "clear",
+): { itemId: string; emphasis: EmphasisMark[] }[] {
+  const perItem = new Map<string, Map<EmphasisField, { start: number; end: number }[]>>();
+  for (const hit of hits) {
+    let fields = perItem.get(hit.itemId);
+    if (!fields) {
+      fields = new Map();
+      perItem.set(hit.itemId, fields);
+    }
+    const ranges = fields.get(hit.field) ?? [];
+    ranges.push({ start: hit.start, end: hit.end });
+    fields.set(hit.field, ranges);
+  }
+
+  const updates: { itemId: string; emphasis: EmphasisMark[] }[] = [];
+  for (const [itemId, fields] of perItem) {
+    let marks = currentMarks(itemId);
+    for (const [field, ranges] of fields) {
+      marks = applyEmphasis(marks, field, ranges, attr);
+    }
+    updates.push({ itemId, emphasis: marks });
+  }
+  return updates;
+}
 
 /* ============================================================
    檔案輸出：CSV（月對帳）與 PNG 圖片（叫貨單）
