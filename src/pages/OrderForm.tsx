@@ -56,6 +56,7 @@ const EMPHASIS_FIELDS: Record<string, EmphasisField> = {
   size: "size",
   usage: "usage",
   spec: "spec",
+  quantity: "quantity",
   notes: "notes",
 };
 
