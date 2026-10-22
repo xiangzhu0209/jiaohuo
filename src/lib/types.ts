@@ -41,7 +41,7 @@ export interface Order {
 }
 
 /** 可被強調（紅字／加粗）的明細欄位。 */
-export type EmphasisField = "productName" | "size" | "usage" | "spec" | "notes";
+export type EmphasisField = "productName" | "size" | "usage" | "spec" | "quantity" | "notes";
 
 /**
  * 一段被強調的文字：只記「欄位＋字元範圍」（start 含、end 不含），
