@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Calculator,
   ClipboardList,
@@ -15,6 +15,7 @@ import {
   Pencil,
   ReceiptText,
   Tags,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ const SALES_ITEMS: NavItem[] = [
 ];
 
 const INBOX_ITEM: NavItem = { to: "/sales/inbox", label: "待下單區", icon: Inbox };
+const MEMBERS_ITEM: NavItem = { to: "/sales/members", label: "業務帳號管理", icon: Users };
 
 function NavGroup({
   title,
@@ -120,7 +122,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
       {showSales && (
         <NavGroup
           title="業務下單"
-          items={isAdmin ? [...SALES_ITEMS, INBOX_ITEM] : SALES_ITEMS}
+          items={isAdmin ? [...SALES_ITEMS, INBOX_ITEM, MEMBERS_ITEM] : SALES_ITEMS}
           badges={{ [INBOX_ITEM.to]: pendingCount }}
           onNavigate={onNavigate}
         />
@@ -258,9 +260,95 @@ function SidebarFooter() {
   );
 }
 
+function SalesOnlyWorkspace() {
+  const { user, profileName, signOut } = useAuth();
+  const { pathname } = useLocation();
+  const showMobileTabs = pathname === "/sales" || pathname === "/sales/inbox" || pathname === "/sales/members";
+  const links: NavItem[] = [
+    { to: "/sales/new", label: "新增業務單", icon: FilePlus2 },
+    { to: "/sales", label: "我的單", icon: ClipboardList, end: true },
+  ];
+  return (
+    <div className="flex min-h-full w-full flex-col bg-background">
+      <header className="print-hidden sticky top-0 z-30 border-b bg-card/95 shadow-sm backdrop-blur">
+        <div className="mx-auto flex min-h-14 max-w-5xl items-center justify-between gap-3 px-4 py-2 md:min-h-16 md:px-8">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <ReceiptText className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold md:text-base">業務下單</p>
+              <p className="truncate text-xs text-muted-foreground">{profileName || user?.email || "業務帳號"}</p>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" className="min-h-10 shrink-0" onClick={() => void signOut()}>
+            <LogOut className="size-4" /> <span className="hidden sm:inline">登出</span>
+          </Button>
+        </div>
+        <nav className="mx-auto hidden max-w-5xl gap-2 px-8 pb-2 md:flex">
+          {links.map(({ to, label, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) => cn(
+                "flex min-h-10 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors",
+                isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <Icon className="size-4" /> {label}
+            </NavLink>
+          ))}
+        </nav>
+      </header>
+      <main className="flex-1 pb-24 md:pb-8">
+        <div className="mx-auto max-w-5xl px-3 py-4 sm:px-5 md:px-8 md:py-7">
+          <Outlet />
+        </div>
+      </main>
+      {showMobileTabs && (
+        <nav className="print-hidden fixed inset-x-0 bottom-0 z-30 grid grid-cols-2 border-t bg-card/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_hsl(var(--foreground)/0.06)] backdrop-blur md:hidden">
+          {links.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) => cn(
+              "flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-xs font-medium transition-colors",
+              isActive ? "bg-primary/10 text-primary" : "text-muted-foreground active:bg-accent",
+            )}
+          >
+            <Icon className="size-5" /> {label}
+          </NavLink>
+          ))}
+        </nav>
+      )}
+    </div>
+  );
+}
+
 export default function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { offline, stopOffline } = useAuth();
+  const location = useLocation();
+  const { offline, stopOffline, user, salesMember, membershipLoading, businessAccount } = useAuth();
+  const isAdmin = isAdminEmail(user?.email);
+
+  if (!offline && !isAdmin && (businessAccount || !!salesMember)) {
+    if (membershipLoading) {
+      return <p className="py-16 text-center text-sm text-muted-foreground">正在確認帳號權限…</p>;
+    }
+    const pending = salesMember?.status !== "active";
+    if (pending && location.pathname !== "/sales/pending") {
+      return <Navigate to="/sales/pending" replace />;
+    }
+    if (!pending && location.pathname === "/sales/pending") {
+      return <Navigate to="/sales/new" replace />;
+    }
+    if (!location.pathname.startsWith("/sales")) {
+      return <Navigate to={pending ? "/sales/pending" : "/sales/new"} replace />;
+    }
+    return <SalesOnlyWorkspace />;
+  }
 
   const handleExport = () => {
     const { orders, items } = downloadOfflineExport();
