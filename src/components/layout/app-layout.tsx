@@ -109,14 +109,21 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
   // 管理者：選單上顯示待下單的數量（每分鐘自動更新）
   const { data: pendingCount = 0 } = useQuery({
-    queryKey: ["sales-inbox", "submitted"],
+    // Never share a cache key with SalesInbox's submitted-orders query: its result type is different.
+    queryKey: ["sales-inbox", "badge-count"],
     enabled: isAdmin,
-    queryFn: () => Promise.all([
-      fetchSalesOrdersByStatus("submitted"),
-      fetchSalesOrdersWithEditRequests(),
-    ]),
+    queryFn: async () => {
+      const [orders, editRequests] = await Promise.all([
+        fetchSalesOrdersByStatus("submitted"),
+        fetchSalesOrdersWithEditRequests(),
+      ]);
+      return {
+        orderCount: Array.isArray(orders) ? orders.length : 0,
+        editRequestCount: Array.isArray(editRequests) ? editRequests.length : 0,
+      };
+    },
     refetchInterval: 60_000,
-    select: ([orders, editRequests]) => orders.length + editRequests.length,
+    select: ({ orderCount, editRequestCount }) => orderCount + editRequestCount,
   });
 
   return (
