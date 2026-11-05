@@ -7,18 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { useAuth } from "@/hooks/use-auth";
+import { isAdminEmail } from "@/lib/sales-types";
 import { toast } from "sonner";
 
 type Mode = "login" | "signup" | "forgot";
 
 const DESCRIPTIONS: Record<Mode, string> = {
   login: "登入您的帳號",
-  signup: "建立新帳號",
+  signup: "建立業務帳號，註冊後由管理者核准",
   forgot: "輸入註冊時的信箱，我們會寄一封重設密碼信給您",
 };
 
 export default function Login() {
-  const { user, loading, signIn, signUp, resetPassword, startOffline } = useAuth();
+  const { user, loading, salesMember, membershipLoading, businessAccount, signIn, signUp, resetPassword, startOffline } = useAuth();
   const [mode, setMode] = useState<Mode>("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -26,8 +27,17 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
   const [offlineName, setOfflineName] = useState("");
 
-  if (loading) return null;
-  if (user) return <Navigate to="/orders" replace />;
+  if (loading || (user && membershipLoading)) return null;
+  if (user) {
+    const destination = isAdminEmail(user.email)
+      ? "/orders"
+      : (businessAccount || !!salesMember)
+        ? salesMember?.status === "active"
+          ? "/sales/new"
+          : "/sales/pending"
+        : "/orders";
+    return <Navigate to={destination} replace />;
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -69,7 +79,7 @@ export default function Login() {
       return;
     }
     if (mode === "signup") {
-      toast("註冊成功，已自動登入");
+      toast("註冊完成，請等待管理者核准後開始使用");
     }
   };
 
@@ -158,39 +168,39 @@ export default function Login() {
                 >
                   忘記密碼？
                 </Button>
-                <div className="mt-1 rounded-md border border-dashed border-input/70 bg-muted/40 p-3">
-                  <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
-                    <CloudOff className="mt-0.5 size-3.5 shrink-0" />
-                    <span>
-                      如果一直登不進來（例如系統連不上），可先用
-                      <span className="font-medium text-foreground">離線模式</span>
-                      下單：資料存在這台電腦，之後匯出即可匯入雲端。
-                    </span>
-                  </p>
-                  <div className="mt-2 flex gap-2">
-                    <Input
-                      value={offlineName}
-                      onChange={(e) => setOfflineName(e.target.value)}
-                      placeholder="你的姓名（印在出單人）"
-                      className="h-9"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      onClick={() => {
-                        if (!offlineName.trim()) {
-                          toast("請輸入姓名（會印在出單人）");
-                          return;
-                        }
-                        startOffline(offlineName);
-                      }}
-                    >
-                      離線下單
-                    </Button>
+                {isAdminEmail(email) && (
+                  <div className="mt-1 rounded-md border border-dashed border-input/70 bg-muted/40 p-3">
+                    <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
+                      <CloudOff className="mt-0.5 size-3.5 shrink-0" />
+                      <span>
+                        管理者網路中斷時可用離線模式暫存叫貨單；業務帳號只能使用經核准的線上業務介面。
+                      </span>
+                    </p>
+                    <div className="mt-2 flex gap-2">
+                      <Input
+                        value={offlineName}
+                        onChange={(e) => setOfflineName(e.target.value)}
+                        placeholder="管理者姓名"
+                        className="h-9"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => {
+                          if (!offlineName.trim()) {
+                            toast("請輸入管理者姓名");
+                            return;
+                          }
+                          startOffline(offlineName);
+                        }}
+                      >
+                        管理者離線
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             )}
             {mode === "signup" && (
