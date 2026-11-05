@@ -67,6 +67,7 @@ export interface SalesOrder {
   kind: SalesKind;
   orderDate: string;
   installTime: string;
+  scheduledInstallTime: string;
   customerName: string;
   phone: string;
   address: string;
