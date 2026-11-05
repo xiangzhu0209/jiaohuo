@@ -200,17 +200,8 @@ export default function WindowCard({
             </Field>
           </div>
 
-          <Field label="尺寸單位">
-            <Choice
-              value={win.unit}
-              options={entries(UNIT_LABELS)}
-              disabled={disabled}
-              onChange={(unit) => onChange({ unit: unit || "cm" })}
-            />
-          </Field>
-
           <div className="grid grid-cols-2 gap-3">
-            <Field label={`寬（${UNIT_LABELS[win.unit]}）`}>
+            <Field label="寬">
               <Input
                 className={inputClass}
                 inputMode="decimal"
@@ -219,8 +210,14 @@ export default function WindowCard({
                 onChange={(e) => onChange({ width: digitsOnly(e.target.value) })}
                 placeholder="寬"
               />
+              <Choice
+                value={win.widthUnit}
+                options={entries(UNIT_LABELS)}
+                disabled={disabled}
+                onChange={(widthUnit) => onChange({ widthUnit: widthUnit || "cm" })}
+              />
             </Field>
-            <Field label={`高（${UNIT_LABELS[win.unit]}）`}>
+            <Field label="高">
               <Input
                 className={inputClass}
                 inputMode="decimal"
@@ -228,6 +225,12 @@ export default function WindowCard({
                 disabled={disabled}
                 onChange={(e) => onChange({ height: digitsOnly(e.target.value) })}
                 placeholder="高"
+              />
+              <Choice
+                value={win.heightUnit}
+                options={entries(UNIT_LABELS)}
+                disabled={disabled}
+                onChange={(heightUnit) => onChange({ heightUnit: heightUnit || "cm" })}
               />
             </Field>
           </div>

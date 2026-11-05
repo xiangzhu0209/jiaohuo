@@ -24,15 +24,18 @@ const money = (n: number): string => (n > 0 ? fmtMoney(n) : "—");
 function TFigure({
   width,
   height,
-  unit,
+  widthUnit,
+  heightUnit,
   compact,
 }: {
   width: string;
   height: string;
-  unit: SizeUnit;
+  widthUnit: SizeUnit;
+  heightUnit: SizeUnit;
   compact: boolean;
 }) {
-  const u = UNIT_SHORT[unit];
+  const widthSymbol = UNIT_SHORT[widthUnit];
+  const heightSymbol = UNIT_SHORT[heightUnit];
   return (
     <svg
       viewBox="0 0 150 112"
@@ -43,10 +46,10 @@ function TFigure({
       <line x1="8" y1="30" x2="112" y2="30" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
       <line x1="60" y1="30" x2="60" y2="104" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
       <text x="60" y="21" textAnchor="middle" fontSize="14" fill="currentColor">
-        {width ? `寬 ${width}${u}` : "寬"}
+        {width ? `寬 ${width}${widthSymbol}` : "寬"}
       </text>
       <text x="67" y="72" fontSize="14" fill="currentColor">
-        {height ? `高 ${height}${u}` : "高"}
+        {height ? `高 ${height}${heightSymbol}` : "高"}
       </text>
     </svg>
   );
@@ -88,11 +91,13 @@ function WindowCell({
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5 leading-snug">
         <p className="break-words font-semibold">
-          <span className="mr-1 font-normal text-muted-foreground">{label}.</span>
+          <span className={cn("mr-1 font-normal", grouped ? "text-destructive" : "text-muted-foreground")}>
+            {label}.
+          </span>
           {w.product || "—"}
           {w.colorCode ? `：${w.colorCode}` : ""}
           {grouped && (
-            <span className="ml-1.5 border border-foreground px-1 text-[0.8em] font-medium">
+            <span className="ml-1.5 border border-destructive px-1 text-[0.8em] font-semibold text-destructive">
               同一窗 {label.split("-")[0]}
             </span>
           )}
@@ -114,7 +119,13 @@ function WindowCell({
         <Line label="製作備註">{w.note || "—"}</Line>
         <Line label="安裝備註">{w.installNote || "—"}</Line>
       </div>
-      <TFigure width={w.width} height={w.height} unit={w.unit} compact={compact} />
+      <TFigure
+        width={w.width}
+        height={w.height}
+        widthUnit={w.widthUnit}
+        heightUnit={w.heightUnit}
+        compact={compact}
+      />
     </div>
   );
 }
@@ -146,7 +157,10 @@ function OrderHeader({
           <span className="font-semibold">{KIND_LABELS[order.kind]}</span>
           <span className="ml-3">負責人：{order.person || "—"}</span>
         </p>
-        <p>預計安裝時間：{order.installTime || "—"}</p>
+        <div className="flex flex-wrap justify-end gap-x-4 gap-y-0.5 text-right">
+          <p>預計安裝時間：{order.installTime || "—"}</p>
+          <p>排定安裝時間：{order.scheduledInstallTime || "—"}</p>
+        </div>
       </div>
 
       <div className="flex items-stretch">
@@ -224,6 +238,8 @@ export default function SalesPage({
             客戶名：{order.customerName || "—"}
             <span className="ml-3">日期：{order.orderDate || "—"}（續）</span>
           </span>
+          <span className="ml-3">預計安裝：{order.installTime || "—"}</span>
+          <span className="ml-3">排定安裝：{order.scheduledInstallTime || "—"}</span>
         </p>
       )}
 
