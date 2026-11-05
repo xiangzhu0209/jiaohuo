@@ -21,6 +21,7 @@ import {
   type SalesWindow,
 } from "@/lib/sales-types";
 import { fmtMoney, toNum } from "@/lib/order-utils";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import SalesGuard from "@/components/order/sales-guard";
 import WindowCard, { Choice, Field } from "@/components/order/sales-window-card";
@@ -50,8 +51,9 @@ function SalesFormInner() {
   const isEdit = !!id;
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { user, profileName } = useAuth();
+  const { user, profileName, businessAccount, salesMember } = useAuth();
   const isAdmin = isAdminEmail(user?.email);
+  const businessMode = (businessAccount || salesMember !== null) && !isAdmin;
 
   const [person, setPerson] = useState("");
   const [kind, setKind] = useState<SalesKind>("company");
@@ -456,7 +458,10 @@ function SalesFormInner() {
       </div>
 
       {!readOnly && (
-        <div className="print-hidden fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 p-3 backdrop-blur md:left-64">
+        <div className={cn(
+          "print-hidden fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 p-3 backdrop-blur",
+          businessMode ? "md:left-0" : "md:left-64",
+        )}>
           <div className="mx-auto flex max-w-2xl gap-2">
             {isNewOrDraft ? (
               <>
