@@ -16,8 +16,10 @@ import {
   updatePassword as firebaseUpdatePassword,
   updateProfile as firebaseUpdateProfile,
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { appBaseUrl, auth, db } from "@/lib/firebase";
+import { registerSalesMember } from "@/lib/sales-members-db";
+import type { SalesMember } from "@/lib/sales-types";
 import {
   getOfflineUser,
   isOfflineMode,
@@ -34,6 +36,10 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
+  /** 目前登入者的業務帳號狀態；null 代表未列入業務名單。 */
+  salesMember: SalesMember | null;
+  membershipLoading: boolean;
+  businessAccount: boolean;
   profileName: string;
   /** 使用離線備案（連不上時先下單，資料存在這台電腦） */
   offline: boolean;
@@ -126,6 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profileName, setProfileName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [salesMember, setSalesMember] = useState<SalesMember | null>(null);
+  const [membershipLoading, setMembershipLoading] = useState(true);
+  const [businessAccount, setBusinessAccount] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState<string | null>(readResetCode);
   const [offline, setOffline] = useState(isOfflineMode);
   const [offlineName, setOfflineName] = useState(getOfflineUser);
@@ -135,15 +144,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const ref = doc(db, "profiles", uid);
     try {
       const snap = await getDoc(ref);
-      const saved = snap.exists() ? String(snap.data().name ?? "") : "";
+      const data = snap.exists() ? snap.data() : {};
+      const saved = String(data.name ?? "");
+      if (data.accountType === "business") setBusinessAccount(true);
       if (saved) {
         setProfileName(saved);
         return;
       }
       setProfileName(fallback);
-      await setDoc(ref, { name: fallback, updatedAt: new Date().toISOString() }, { merge: true });
     } catch {
-      // 讀寫失敗（例如規則未部署）也不該擋住下單，先用帳號上的名字。
+      // 讀取失敗時不自行改變身分狀態；業務權限仍由即時會員狀態及安全規則判斷。
       setProfileName(fallback);
     }
   }, []);
@@ -158,17 +168,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser({ id: firebaseUser.uid, email: firebaseUser.email });
-        setLoading(false);
-        void loadProfile(firebaseUser.uid, firebaseUser.displayName ?? "");
+        setBusinessAccount(false);
+        void loadProfile(firebaseUser.uid, firebaseUser.displayName ?? "").finally(() => setLoading(false));
       } else {
         setUser(null);
         setProfileName("");
+        setBusinessAccount(false);
+        setSalesMember(null);
+        setMembershipLoading(false);
         setLoading(false);
       }
     });
 
     return unsubscribe;
   }, [loadProfile, offline]);
+
+  useEffect(() => {
+    if (offline || !user) {
+      setSalesMember(null);
+      setMembershipLoading(false);
+      return;
+    }
+    setMembershipLoading(true);
+    const unsubscribe = onSnapshot(
+      doc(db, "sales_members", user.id),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setSalesMember(null);
+        } else {
+          const data = snapshot.data();
+          setBusinessAccount(true);
+          const status = data.status === "active" || data.status === "disabled" ? data.status : "pending";
+          setSalesMember({
+            uid: snapshot.id,
+            email: typeof data.email === "string" ? data.email : user.email ?? "",
+            name: typeof data.name === "string" ? data.name : "",
+            status,
+            createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
+            updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
+            approvedAt: typeof data.approvedAt === "string" ? data.approvedAt : "",
+          });
+        }
+        setMembershipLoading(false);
+      },
+      () => {
+        setSalesMember(null);
+        setMembershipLoading(false);
+      },
+    );
+    return unsubscribe;
+  }, [offline, user]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     try {
@@ -184,11 +233,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       await firebaseUpdateProfile(credential.user, { displayName: trimmed });
-      await setDoc(
-        doc(db, "profiles", credential.user.uid),
-        { name: trimmed, email: email.trim(), updatedAt: new Date().toISOString() },
-        { merge: true },
-      );
+      const now = new Date().toISOString();
+      await setDoc(doc(db, "profiles", credential.user.uid), {
+        name: trimmed,
+        email: email.trim().toLowerCase(),
+        accountType: "business",
+        updatedAt: now,
+      });
+      setBusinessAccount(true);
+      await registerSalesMember(credential.user.uid, email, trimmed);
       setProfileName(trimmed);
       return { error: null };
     } catch (error) {
@@ -297,6 +350,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user: effectiveUser,
         loading,
+        salesMember,
+        membershipLoading,
+        businessAccount,
         profileName: effectiveProfileName,
         offline,
         startOffline,
