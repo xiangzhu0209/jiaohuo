@@ -15,6 +15,18 @@ export type WallOption = "" | "shift" | "frame";
 export type SizeUnit = "cm" | "tai";
 /** 列印種類：留存單（完整）／安裝單（不含牌價） */
 export type PrintVariant = "keep" | "install";
+export type SalesMemberStatus = "pending" | "active" | "disabled";
+
+/** 業務帳號的管理狀態。 */
+export interface SalesMember {
+  uid: string;
+  email: string;
+  name: string;
+  status: SalesMemberStatus;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt: string;
+}
 
 /** 一個窗位（手寫單上的一格）。 */
 export interface SalesWindow {
