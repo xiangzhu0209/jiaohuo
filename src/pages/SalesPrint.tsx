@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, CheckCheck, Edit, ImageDown, Printer } from "lucide-react";
-import { fetchSalesOrdersByIds, markSalesOrdered } from "@/lib/sales-db";
+import { ArrowLeft, Bold, CheckCheck, Edit, Eraser, ImageDown, Printer, Type } from "lucide-react";
+import { fetchSalesOrdersByIds, markSalesOrdered, saveSalesPrintEmphasis } from "@/lib/sales-db";
 import {
   VARIANT_LABELS,
   WINDOWS_PER_PAGE,
@@ -15,6 +15,7 @@ import { downloadSheetPng, paperWidthPx } from "@/lib/order-utils";
 import { useAuth } from "@/hooks/use-auth";
 import SalesGuard from "@/components/order/sales-guard";
 import SalesPage from "@/components/order/sales-sheet";
+import { collectSalesSelection, updateSalesMarks } from "@/lib/sales-emphasis";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -58,6 +59,19 @@ function PrintInner() {
   const [zoom, setZoom] = useState(1);
   const fitRef = useRef<HTMLDivElement>(null);
   const sheetsRef = useRef<HTMLDivElement>(null);
+  const selectionRef = useRef<Range | null>(null);
+
+  useEffect(() => {
+    const remember = () => {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount && !selection.isCollapsed &&
+          sheetsRef.current?.contains(selection.anchorNode) && sheetsRef.current?.contains(selection.focusNode)) {
+        selectionRef.current = selection.getRangeAt(0).cloneRange();
+      }
+    };
+    document.addEventListener("selectionchange", remember);
+    return () => document.removeEventListener("selectionchange", remember);
+  }, []);
 
   const changePaper = (v: Paper) => {
     setPaper(v);
@@ -102,6 +116,47 @@ function PrintInner() {
       }),
     [orders, paper],
   );
+
+  const [marking, setMarking] = useState(false);
+  const markSelection = async (action: "red" | "bold" | "clear") => {
+    const current = window.getSelection();
+    const range = current?.rangeCount && !current.isCollapsed ? current.getRangeAt(0) : selectionRef.current;
+    if (!range || !sheetsRef.current) {
+      toast("請先在訂單上選取要標記的文字");
+      return;
+    }
+    const hits = collectSalesSelection(range, sheetsRef.current);
+    if (!hits.length) {
+      toast("請選取訂單上的資料文字後再標記");
+      return;
+    }
+    const selectedOrders = orders.filter((order) => hits.some((hit) => hit.orderId === order.id));
+    if (selectedOrders.some((order) => !isAdmin && (order.ownerId !== user?.id ||
+      (order.status !== "draft" && !order.editApproved)))) {
+      toast("此訂單尚未開放修改；請先向管理者申請");
+      return;
+    }
+    setMarking(true);
+    try {
+      // 每張單寫入一次，跨窗選取不會互相覆蓋。
+      for (const order of selectedOrders) {
+        const marks = updateSalesMarks(order.printEmphasis, hits.filter((hit) => hit.orderId === order.id), action);
+        await saveSalesPrintEmphasis(order.id, order.updatedAt, marks);
+      }
+      toast(action === "clear" ? "已清除重點標記" : action === "red" ? "已標成紅字" : "已標成粗體");
+    } catch (error) {
+      toast(`重點字儲存失敗：${(error as Error).message}`);
+    } finally {
+      selectionRef.current = null;
+      window.getSelection()?.removeAllRanges();
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["sales-print"] }),
+        qc.invalidateQueries({ queryKey: ["sales-order"] }),
+        qc.invalidateQueries({ queryKey: ["sales-orders"] }),
+      ]);
+      setMarking(false);
+    }
+  };
 
   const pendingIds = orders.filter((o) => o.status === "submitted").map((o) => o.id);
 
@@ -185,6 +240,19 @@ function PrintInner() {
               <Printer className="size-4" /> 列印／存成 PDF
             </Button>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
+          <span className="text-sm text-muted-foreground">重點字：</span>
+          <Button variant="outline" size="sm" disabled={marking} onMouseDown={(e) => e.preventDefault()} onClick={() => void markSelection("red")}>
+            <Type className="size-4 text-destructive" /> 紅字
+          </Button>
+          <Button variant="outline" size="sm" disabled={marking} onMouseDown={(e) => e.preventDefault()} onClick={() => void markSelection("bold")}>
+            <Bold className="size-4" /> 加粗
+          </Button>
+          <Button variant="outline" size="sm" disabled={marking} onMouseDown={(e) => e.preventDefault()} onClick={() => void markSelection("clear")}>
+            <Eraser className="size-4" /> 清除
+          </Button>
+          <span className="text-xs text-muted-foreground">選取單上的文字後按按鈕，標記會自動儲存；已鎖定的單需先核准修改。</span>
         </div>
         {isAdmin && pendingIds.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
