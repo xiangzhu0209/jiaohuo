@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Plus, Printer, Save, Send } from "lucide-react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { createSalesOrder, fetchSalesOrder, updateSalesOrder } from "@/lib/sales-db";
 import {
   KIND_LABELS,
@@ -80,6 +82,14 @@ function SalesFormInner() {
     enabled: isEdit,
     queryFn: () => fetchSalesOrder(id!),
   });
+
+  // 只重新讀取權限狀態，不覆寫已輸入的表單；管理者核准或鎖定時即時刷新。
+  useEffect(() => {
+    if (!id) return;
+    return onSnapshot(doc(db, "sales_orders", id), () => {
+      void qc.invalidateQueries({ queryKey: ["sales-order", id] });
+    });
+  }, [id, qc]);
 
   // 新單：第一個窗位預設展開
   useEffect(() => {
@@ -223,7 +233,13 @@ function SalesFormInner() {
         navigate(`/sales/print?ids=${savedId}`);
       }
     },
-    onError: (err) => toast(`儲存失敗：${(err as Error).message}`),
+    onError: (err) => {
+      const code = (err as { code?: string }).code;
+      toast(code === "permission-denied"
+        ? "儲存失敗：修改權限可能已被重新鎖定，或安全規則尚未更新；請聯絡管理者。"
+        : `儲存失敗：${(err as Error).message}`, { duration: 7000 });
+      void qc.invalidateQueries({ queryKey: ["sales-order", id] });
+    },
   });
 
   /** 送出（或修改已送出的單）前的必填檢查。 */
@@ -265,7 +281,7 @@ function SalesFormInner() {
   const isNewOrDraft = !isEdit || status === "draft";
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-5 pb-32">
+    <div className={cn("mx-auto flex max-w-2xl flex-col gap-5 pb-32", businessMode && "pb-52 md:pb-32")}>
       <div className="flex items-center gap-3">
         <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="size-5" />
@@ -486,7 +502,7 @@ function SalesFormInner() {
       {!readOnly && (
         <div className={cn(
           "print-hidden fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 p-3 backdrop-blur",
-          businessMode ? "md:left-0" : "md:left-64",
+          businessMode ? "bottom-[calc(4rem+max(0.5rem,env(safe-area-inset-bottom)))] md:bottom-0 md:left-0" : "md:left-64",
         )}>
           <div className="mx-auto flex max-w-2xl gap-2">
             {isNewOrDraft ? (
