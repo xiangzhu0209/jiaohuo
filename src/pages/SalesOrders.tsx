@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ClipboardList, Pencil, Plus, Printer, Trash2 } from "lucide-react";
-import { deleteSalesOrder, fetchMySalesOrders } from "@/lib/sales-db";
+import { ClipboardList, FilePenLine, Pencil, Plus, Printer, Trash2 } from "lucide-react";
+import { deleteSalesOrder, fetchMySalesOrders, requestSalesOrderEdit } from "@/lib/sales-db";
 import { KIND_LABELS, STATUS_LABELS, type SalesOrder, type SalesStatus } from "@/lib/sales-types";
 import { fmtMoney } from "@/lib/order-utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -11,6 +11,7 @@ import StatusBadge from "@/components/order/sales-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +32,8 @@ function MyOrdersInner() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<Filter>("all");
   const [deleteTarget, setDeleteTarget] = useState<SalesOrder | null>(null);
+  const [requestTarget, setRequestTarget] = useState<SalesOrder | null>(null);
+  const [requestReason, setRequestReason] = useState("");
 
   const { data: orders = [], isLoading, isError, error } = useQuery({
     queryKey: ["sales-orders", user?.id],
@@ -45,6 +48,21 @@ function MyOrdersInner() {
   }, [orders]);
 
   const shown = filter === "all" ? orders : orders.filter((o) => o.status === filter);
+
+  const submitEditRequest = useMutation({
+    mutationFn: async () => {
+      if (!requestTarget) throw new Error("請選擇訂單");
+      if (!requestReason.trim()) throw new Error("請填寫修改原因");
+      await requestSalesOrderEdit(requestTarget.id, requestReason);
+    },
+    onSuccess: () => {
+      toast("修改申請已送出，等待管理者確認");
+      setRequestTarget(null);
+      setRequestReason("");
+      void qc.invalidateQueries({ queryKey: ["sales-orders"] });
+    },
+    onError: (err) => toast(`申請失敗：${(err as Error).message}`),
+  });
 
   const remove = useMutation({
     mutationFn: (id: string) => deleteSalesOrder(id),
@@ -107,10 +125,36 @@ function MyOrdersInner() {
                     {o.deposit > 0 ? `，訂金 ${fmtMoney(o.deposit)}` : ""}
                   </p>
                 )}
+                {o.status !== "draft" && (
+                  <p className={`text-sm ${o.editRequestStatus === "rejected" ? "text-destructive" : "text-muted-foreground"}`}>
+                    {o.editRequestStatus === "pending"
+                      ? `修改申請審核中${o.editRequestReason ? `：${o.editRequestReason}` : ""}`
+                      : o.editApproved
+                        ? "管理者已核准修改；可編輯，直到管理者重新鎖定。"
+                        : o.editRequestStatus === "rejected"
+                          ? `管理者已拒絕修改申請${o.editRequestReason ? `：${o.editRequestReason}` : ""}`
+                          : "訂單已送出並鎖定。"}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => navigate(`/sales/${o.id}/edit`)}>
-                    <Pencil className="size-4" /> {o.status === "ordered" ? "查看" : "編輯"}
-                  </Button>
+                  {o.status === "draft" || o.editApproved ? (
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/sales/${o.id}/edit`)}>
+                      <Pencil className="size-4" /> 編輯
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={o.editRequestStatus === "pending" || submitEditRequest.isPending}
+                      onClick={() => {
+                        setRequestTarget(o);
+                        setRequestReason("");
+                      }}
+                    >
+                      <FilePenLine className="size-4" />
+                      {o.editRequestStatus === "pending" ? "申請審核中" : "申請修改"}
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => navigate(`/sales/print?ids=${o.id}`)}>
                     <Printer className="size-4" /> 預覽／匯出
                   </Button>
@@ -130,6 +174,40 @@ function MyOrdersInner() {
           ))}
         </div>
       )}
+
+      <AlertDialog
+        open={!!requestTarget}
+        onOpenChange={(open) => {
+          if (!open && !submitEditRequest.isPending) setRequestTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>申請修改已送出的訂單</AlertDialogTitle>
+            <AlertDialogDescription>
+              {requestTarget?.customerName || "這張訂單"} 目前為鎖定狀態。請說明需要修改的內容，管理者核准前無法編輯。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            rows={4}
+            value={requestReason}
+            onChange={(event) => setRequestReason(event.target.value)}
+            placeholder="請填寫修改原因或需要調整的內容"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitEditRequest.isPending}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitEditRequest.isPending || !requestReason.trim()}
+              onClick={(event) => {
+                event.preventDefault();
+                submitEditRequest.mutate();
+              }}
+            >
+              {submitEditRequest.isPending ? "送出中…" : "送出申請"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>

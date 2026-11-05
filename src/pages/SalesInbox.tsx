@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { CheckCheck, Inbox, Pencil, Printer, RotateCcw, Search } from "lucide-react";
+import { Check, CheckCheck, Inbox, LockKeyhole, Pencil, Printer, RotateCcw, Search, X } from "lucide-react";
 import {
   fetchSalesOrdersByStatus,
+  fetchSalesOrdersWithEditRequests,
+  lockSalesOrderEdits,
   markSalesOrdered,
   reopenSalesOrders,
+  reviewSalesOrderEdit,
 } from "@/lib/sales-db";
 import { KIND_LABELS, type SalesOrder } from "@/lib/sales-types";
 import { fmtMoney } from "@/lib/order-utils";
@@ -19,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
-type Tab = "submitted" | "ordered";
+type Tab = "submitted" | "ordered" | "modifications";
 
 const stamp = (iso: string): string => {
   if (!iso) return "";
@@ -42,18 +45,24 @@ function InboxInner() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const { data: pending = [], isLoading: loadingPending, isError, error } = useQuery({
+  const { data: pending = [], isLoading: loadingPending, isError: pendingError, error: pendingErr } = useQuery({
     queryKey: ["sales-inbox", "submitted"],
     queryFn: () => fetchSalesOrdersByStatus("submitted"),
   });
-  const { data: done = [], isLoading: loadingDone } = useQuery({
+  const { data: done = [], isLoading: loadingDone, isError: doneError, error: doneErr } = useQuery({
     queryKey: ["sales-inbox", "ordered"],
     enabled: tab === "ordered",
     queryFn: () => fetchSalesOrdersByStatus("ordered"),
   });
+  const { data: modificationRequests = [], isLoading: loadingRequests, isError: requestsError, error: requestsErr } = useQuery({
+    queryKey: ["sales-inbox", "modifications"],
+    queryFn: fetchSalesOrdersWithEditRequests,
+  });
 
-  const list = tab === "submitted" ? pending : done;
-  const loading = tab === "submitted" ? loadingPending : loadingDone;
+  const list = tab === "submitted" ? pending : tab === "ordered" ? done : modificationRequests;
+  const loading = tab === "submitted" ? loadingPending : tab === "ordered" ? loadingDone : loadingRequests;
+  const isError = tab === "submitted" ? pendingError : tab === "ordered" ? doneError : requestsError;
+  const error = tab === "submitted" ? pendingErr : tab === "ordered" ? doneErr : requestsErr;
 
   const shown = useMemo(() => {
     const kw = search.trim().toLowerCase();
@@ -109,20 +118,40 @@ function InboxInner() {
     onError: (err) => toast(`更新失敗：${(err as Error).message}`),
   });
 
+  const reviewEdit = useMutation({
+    mutationFn: ({ id, approved }: { id: string; approved: boolean }) =>
+      reviewSalesOrderEdit(id, approved, profileName || user?.email || "管理者"),
+    onSuccess: (_result, variables) => {
+      toast(variables.approved ? "已核准修改，訂單開放至管理者重新鎖定" : "已拒絕修改申請，訂單維持鎖定");
+      refresh();
+    },
+    onError: (err) => toast(`處理失敗：${(err as Error).message}`),
+  });
+  const lockEdits = useMutation({
+    mutationFn: lockSalesOrderEdits,
+    onSuccess: () => {
+      toast("已重新鎖定訂單修改權限");
+      refresh();
+    },
+    onError: (err) => toast(`鎖定失敗：${(err as Error).message}`),
+  });
+
   const printIds = (ids: string[], type: "keep" | "install") =>
     navigate(`/sales/print?ids=${ids.join(",")}&type=${type}`);
-  const busy = markOrdered.isPending || reopen.isPending;
+  const busy = markOrdered.isPending || reopen.isPending || reviewEdit.isPending || lockEdits.isPending;
 
   const row = (o: SalesOrder) => (
     <Card key={o.id} className={selected.has(o.id) ? "border-primary/60" : undefined}>
       <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex items-start gap-3">
-          <Checkbox
-            className="mt-1 size-5"
-            checked={selected.has(o.id)}
-            onCheckedChange={() => toggle(o.id)}
-            aria-label="選取這張單"
-          />
+          {tab !== "modifications" && (
+            <Checkbox
+              className="mt-1 size-5"
+              checked={selected.has(o.id)}
+              onCheckedChange={() => toggle(o.id)}
+              aria-label="選取這張單"
+            />
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <p className="truncate text-base font-semibold">{o.customerName || "（未填客戶名）"}</p>
@@ -139,10 +168,35 @@ function InboxInner() {
               {tab === "ordered" && o.orderedAt
                 ? `・${stamp(o.orderedAt)} 由 ${o.orderedBy || "管理者"} 下單`
                 : ""}
+              {tab === "modifications" && o.editRequestAt ? `・申請 ${stamp(o.editRequestAt)}` : ""}
             </p>
+            {tab === "modifications" && (
+              <p className="mt-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+                <span className="font-medium">修改原因：</span>{o.editRequestReason || "（未填寫）"}
+              </p>
+            )}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 pl-8">
+        <div className={`flex flex-wrap gap-2 ${tab === "modifications" ? "pl-0" : "pl-8"}`}>
+          {tab === "modifications" ? (
+            <>
+              <Button size="sm" disabled={busy} onClick={() => reviewEdit.mutate({ id: o.id, approved: true })}>
+                <Check className="size-4" /> 核准修改
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => reviewEdit.mutate({ id: o.id, approved: false })}
+              >
+                <X className="size-4" /> 拒絕
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate(`/sales/${o.id}/edit`)}>
+                <Pencil className="size-4" /> 查看訂單
+              </Button>
+            </>
+          ) : (
+            <>
           <Button variant="outline" size="sm" onClick={() => printIds([o.id], "keep")}>
             <Printer className="size-4" /> 留存單
           </Button>
@@ -161,6 +215,18 @@ function InboxInner() {
               <RotateCcw className="size-4" /> 改回待下單
             </Button>
           )}
+          {o.editApproved && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => lockEdits.mutate(o.id)}
+            >
+              <LockKeyhole className="size-4" /> 重新鎖定修改
+            </Button>
+          )}
+          </>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -171,7 +237,7 @@ function InboxInner() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">待下單區</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          業務送來的單都在這裡；勾選後可以一起列印，印完標記為已下單
+          管理業務送來的訂單、審核修改申請，並可列印、標記已下單或重新鎖定修改權限
         </p>
       </div>
 
@@ -182,9 +248,10 @@ function InboxInner() {
           setSelected(new Set());
         }}
       >
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid h-auto w-full grid-cols-3">
           <TabsTrigger value="submitted">待下單 {pending.length}</TabsTrigger>
           <TabsTrigger value="ordered">已下單</TabsTrigger>
+          <TabsTrigger value="modifications">修改申請 {modificationRequests.length}</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -198,7 +265,7 @@ function InboxInner() {
         />
       </div>
 
-      {shown.length > 0 && (
+      {shown.length > 0 && tab !== "modifications" && (
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
@@ -257,7 +324,9 @@ function InboxInner() {
             ? "沒有符合搜尋的單"
             : tab === "submitted"
               ? "目前沒有待下單的單"
-              : "還沒有已下單的單"}
+              : tab === "ordered"
+                ? "還沒有已下單的單"
+                : "目前沒有待審核的修改申請"}
         </div>
       ) : (
         <div className="flex flex-col gap-3">{shown.map(row)}</div>

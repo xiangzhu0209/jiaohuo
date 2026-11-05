@@ -116,7 +116,7 @@ function SalesFormInner() {
 
   const status: SalesStatus = existing?.status ?? "draft";
   // 已下單的單，業務不能再改；管理者可以
-  const readOnly = isEdit && status === "ordered" && !isAdmin;
+  const readOnly = isEdit && status !== "draft" && !isAdmin && !existing?.editApproved;
 
   const total = toNum(totalText);
   const deposit = toNum(depositText);
@@ -195,6 +195,12 @@ function SalesFormInner() {
         balanceMethod,
         notes: notes.trim(),
         status: target,
+        editRequestStatus: existing?.editRequestStatus ?? "",
+        editRequestReason: existing?.editRequestReason ?? "",
+        editRequestAt: existing?.editRequestAt ?? "",
+        editReviewedAt: existing?.editReviewedAt ?? "",
+        editReviewedBy: existing?.editReviewedBy ?? "",
+        editApproved: existing?.editApproved ?? false,
         // 完全空白的窗位不存
         windows: windows.filter((w) => !isBlankWindow(w)),
       };
@@ -274,7 +280,13 @@ function SalesFormInner() {
 
       {readOnly && (
         <div className="flex flex-col gap-3 rounded-lg border border-warning/50 bg-warning/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <span>這張單已經下單，不能再修改。需要修改請聯絡管理者。</span>
+          <span>
+            {existing?.editRequestStatus === "pending"
+              ? "修改申請審核中；目前仍不能修改。"
+              : existing?.editRequestStatus === "rejected"
+                ? "管理者已拒絕修改申請；訂單仍維持鎖定。"
+                : "這張已送出的訂單目前已鎖定，請回「我的單」申請修改。"}
+          </span>
           <Button variant="outline" size="sm" onClick={() => navigate(`/sales/print?ids=${id}`)}>
             <Printer className="size-4" /> 預覽／匯出
           </Button>
