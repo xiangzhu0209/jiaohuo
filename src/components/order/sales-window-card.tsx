@@ -128,18 +128,6 @@ export default function WindowCard({
 
       {open && (
         <div className="flex flex-col gap-4 p-4">
-          {index > 1 && (
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-primary/50 bg-primary/5 px-3 py-2.5 text-sm">
-              <Checkbox
-                className="size-5"
-                checked={win.sameAsPrev}
-                disabled={disabled}
-                onCheckedChange={(v) => onChange({ sameAsPrev: v === true })}
-              />
-              與上一個窗位是同一窗（例如同一扇窗的布＋紗）
-            </label>
-          )}
-
           <Field label="空間">
             <div className="flex flex-wrap gap-1.5">
               {ROOM_SUGGESTIONS.map((room) => (
@@ -166,6 +154,13 @@ export default function WindowCard({
               onChange={(e) => onChange({ space: e.target.value })}
               placeholder="其他空間，自己輸入"
             />
+            {index > 1 && (
+              <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-primary/50 bg-primary/5 px-3 py-2.5 text-sm">
+                <Checkbox className="size-5" checked={win.sameAsPrev} disabled={disabled}
+                  onCheckedChange={(v) => onChange({ sameAsPrev: v === true })} />
+                與上一個窗位是同一窗（例如同一扇窗的布＋紗）
+              </label>
+            )}
           </Field>
 
           <div className="grid grid-cols-2 gap-3">

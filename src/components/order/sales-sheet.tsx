@@ -17,6 +17,7 @@ import {
   type SalesWindow,
 } from "@/lib/sales-types";
 import { cn } from "@/lib/utils";
+import { SalesText } from "@/components/order/sales-emphasis";
 
 const money = (n: number): string => (n > 0 ? fmtMoney(n) : "—");
 
@@ -27,12 +28,16 @@ function TFigure({
   widthUnit,
   heightUnit,
   compact,
+  win,
+  order,
 }: {
   width: string;
   height: string;
   widthUnit: SizeUnit;
   heightUnit: SizeUnit;
   compact: boolean;
+  win: SalesWindow;
+  order: SalesOrder;
 }) {
   const widthSymbol = UNIT_SHORT[widthUnit];
   const heightSymbol = UNIT_SHORT[heightUnit];
@@ -46,10 +51,10 @@ function TFigure({
       <line x1="8" y1="30" x2="112" y2="30" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
       <line x1="60" y1="30" x2="60" y2="104" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
       <text x="60" y="21" textAnchor="middle" fontSize="14" fill="currentColor">
-        {width ? `寬 ${width}${widthSymbol}` : "寬"}
+        {width ? <>寬 <SalesText svg text={`${width}${widthSymbol}`} field={`window:${win.id}:width`} marks={order.printEmphasis} /></> : "寬"}
       </text>
       <text x="67" y="72" fontSize="14" fill="currentColor">
-        {height ? `高 ${height}${heightSymbol}` : "高"}
+        {height ? <>高 <SalesText svg text={`${height}${heightSymbol}`} field={`window:${win.id}:height`} marks={order.printEmphasis} /></> : "高"}
       </text>
     </svg>
   );
@@ -69,7 +74,9 @@ function WindowCell({
   label,
   compact,
   variant,
+  order,
 }: {
+  order: SalesOrder;
   w: SalesWindow;
   label: string;
   compact: boolean;
@@ -81,6 +88,9 @@ function WindowCell({
   // 編號長得像 3-1 就代表和別的窗位是同一窗
   const grouped = label.includes("-");
   const showPrice = variant === "keep";
+  const field = (name: string, text: string) => text
+    ? <SalesText text={text} field={`window:${w.id}:${name}`} marks={order.printEmphasis} />
+    : "—";
   return (
     <div
       className={cn(
@@ -94,30 +104,32 @@ function WindowCell({
           <span className={cn("mr-1 font-normal", grouped ? "text-destructive" : "text-muted-foreground")}>
             {label}.
           </span>
-          {w.product || "—"}
-          {w.colorCode ? `：${w.colorCode}` : ""}
+          {field("product", w.product)}
+          {w.colorCode && <>：{field("colorCode", w.colorCode)}</>}
+        </p>
+        <Line label="空間">
+          {field("space", w.space)}
           {grouped && (
             <span className="ml-1.5 border border-destructive px-1 text-[0.8em] font-semibold text-destructive">
-              同一窗 {label.split("-")[0]}
+              {field("sameWindow", `同一窗 ${label.split("-")[0]}`)}
             </span>
           )}
-        </p>
-        <Line label="空間">{w.space || "—"}</Line>
-        <Line label="開法">{open || "—"}</Line>
-        <Line label="鎖點">{mountText(w) || "—"}</Line>
+        </Line>
+        <Line label="開法">{field("open", open)}</Line>
+        <Line label="鎖點">{field("mount", mountText(w))}</Line>
         {showPrice && (
           <Line label="牌價">
-            {w.listPrice ? fmtMoney(Number(w.listPrice)) : "—"}
+            {field("listPrice", w.listPrice ? fmtMoney(Number(w.listPrice)) : "")}
             {w.product === MULTIPLIER_PRODUCT && (
               <span className="ml-3">
                 <span className="text-muted-foreground">倍數：</span>
-                {w.multiplier || "—"}
+                {field("multiplier", w.multiplier)}
               </span>
             )}
           </Line>
         )}
-        <Line label="製作備註">{w.note || "—"}</Line>
-        <Line label="安裝備註">{w.installNote || "—"}</Line>
+        <Line label="製作備註">{field("note", w.note)}</Line>
+        <Line label="安裝備註">{field("installNote", w.installNote)}</Line>
       </div>
       <TFigure
         width={w.width}
@@ -125,6 +137,8 @@ function WindowCell({
         widthUnit={w.widthUnit}
         heightUnit={w.heightUnit}
         compact={compact}
+        win={w}
+        order={order}
       />
     </div>
   );
@@ -147,6 +161,9 @@ function OrderHeader({
   variant: PrintVariant;
 }) {
   const balance = balanceOf(order.total, order.deposit);
+  const field = (name: string, text: string) => text
+    ? <SalesText text={text} field={`header:${name}`} marks={order.printEmphasis} />
+    : "—";
   const L = labelCell(compact);
   const V = valueCell(compact);
   return (
@@ -154,45 +171,45 @@ function OrderHeader({
       <div className="flex flex-wrap items-end justify-between gap-x-4">
         <p>
           <span className="mr-3 border border-foreground px-1.5 font-semibold">{VARIANT_LABELS[variant]}</span>
-          <span className="font-semibold">{KIND_LABELS[order.kind]}</span>
-          <span className="ml-3">負責人：{order.person || "—"}</span>
+          <span className="font-semibold">{field("kind", KIND_LABELS[order.kind])}</span>
+          <span className="ml-3">負責人：{field("person", order.person)}</span>
         </p>
         <div className="flex flex-wrap justify-end gap-x-4 gap-y-0.5 text-right">
-          <p>預計安裝時間：{order.installTime || "—"}</p>
-          <p>排定安裝時間：{order.scheduledInstallTime || "—"}</p>
+          <p>預計安裝時間：{field("installTime", order.installTime)}</p>
+          <p>排定安裝時間：{field("scheduledInstallTime", order.scheduledInstallTime)}</p>
         </div>
       </div>
 
       <div className="flex items-stretch">
         <div className="grid min-w-0 flex-1 grid-cols-[auto_auto_auto_minmax(0,1fr)_auto_auto] border-b border-r">
           <div className={L}>日期</div>
-          <div className={cn(V, "whitespace-nowrap")}>{order.orderDate || "—"}</div>
+          <div className={cn(V, "whitespace-nowrap")}>{field("orderDate", order.orderDate)}</div>
           <div className={L}>客戶名</div>
-          <div className={V}>{order.customerName || "—"}</div>
+          <div className={V}>{field("customerName", order.customerName)}</div>
           <div className={L}>電話</div>
-          <div className={cn(V, "whitespace-nowrap")}>{order.phone || "—"}</div>
+          <div className={cn(V, "whitespace-nowrap")}>{field("phone", order.phone)}</div>
           <div className={L}>地址</div>
-          <div className={cn(V, "col-span-5")}>{order.address || "—"}</div>
+          <div className={cn(V, "col-span-5")}>{field("address", order.address)}</div>
         </div>
         <div className="grid w-[38%] shrink-0 grid-cols-[auto_minmax(0,1fr)] border-b border-r">
           <div className={L}>總價</div>
-          <div className={cn(V, "text-right tabular-nums")}>{money(order.total)}</div>
+          <div className={cn(V, "text-right tabular-nums")}>{field("total", money(order.total))}</div>
           <div className={L}>訂金</div>
           <div className={cn(V, "flex justify-between gap-2 tabular-nums")}>
-            <span>{money(order.deposit)}</span>
-            <span>{payText(order.depositMethod)}</span>
+            <span>{field("deposit", money(order.deposit))}</span>
+            <span>{order.depositMethod ? field("depositMethod", payText(order.depositMethod)) : ""}</span>
           </div>
           <div className={L}>尾款</div>
           <div className={cn(V, "flex justify-between gap-2 tabular-nums")}>
-            <span>{order.total > 0 ? fmtMoney(balance) : "—"}</span>
-            <span>{payText(order.balanceMethod)}</span>
+            <span>{field("balance", order.total > 0 ? fmtMoney(balance) : "")}</span>
+            <span>{order.balanceMethod ? field("balanceMethod", payText(order.balanceMethod)) : ""}</span>
           </div>
         </div>
       </div>
 
       <p className="break-words">
         <span className="text-muted-foreground">訂單備註：</span>
-        {order.notes || "—"}
+        {field("notes", order.notes)}
       </p>
     </div>
   );
@@ -223,6 +240,7 @@ export default function SalesPage({
   const compact = paper === "a5l";
   return (
     <div
+      data-sales-order={order.id}
       className={cn(
         "paper-sheet flex flex-col bg-card text-card-foreground",
         "rounded-lg border shadow-elegant print:rounded-none print:border-0 print:shadow-none",
@@ -248,7 +266,7 @@ export default function SalesPage({
       ) : (
         <div className={cn("grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)]", compact ? "gap-1.5" : "gap-2")}>
           {windows.map((w, i) => (
-            <WindowCell key={w.id} w={w} label={labels[i] ?? String(i + 1)} compact={compact} variant={variant} />
+            <WindowCell key={w.id} order={order} w={w} label={labels[i] ?? String(i + 1)} compact={compact} variant={variant} />
           ))}
         </div>
       )}
