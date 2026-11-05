@@ -266,7 +266,10 @@ function SidebarFooter() {
 function SalesOnlyWorkspace() {
   const { user, profileName, signOut } = useAuth();
   const { pathname } = useLocation();
-  const showMobileTabs = pathname === "/sales" || pathname === "/sales/inbox" || pathname === "/sales/members";
+  // 業務填單、我的單與編輯頁都保留手機底部切換列；唯獨待核准及列印頁不顯示。
+  const showMobileTabs = pathname.startsWith("/sales")
+    && pathname !== "/sales/pending"
+    && pathname !== "/sales/print";
   const links: NavItem[] = [
     { to: "/sales/new", label: "新增業務單", icon: FilePlus2 },
     { to: "/sales", label: "我的單", icon: ClipboardList, end: true },
