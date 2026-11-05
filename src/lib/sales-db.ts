@@ -6,6 +6,7 @@ import {
   getDoc,
   getDocs,
   query,
+  runTransaction,
   updateDoc,
   where,
   writeBatch,
@@ -20,6 +21,7 @@ import {
   type SalesOrderInput,
   type SalesStatus,
   type SalesWindow,
+  type SalesPrintMark,
 } from "./sales-types";
 
 /** 業務單（一張單一份文件，窗位放在裡面）。 */
@@ -85,6 +87,13 @@ function mapOrder(id: string, d: DocumentData): SalesOrder {
     editReviewedAt: str(d.editReviewedAt),
     editReviewedBy: str(d.editReviewedBy),
     editApproved: d.editApproved === true,
+    printEmphasis: Array.isArray(d.printEmphasis) ? d.printEmphasis.filter((m: unknown): m is SalesPrintMark => {
+      if (!m || typeof m !== "object") return false;
+      const mark = m as Record<string, unknown>;
+      return typeof mark.field === "string" && typeof mark.text === "string" &&
+        Number.isInteger(mark.start) && Number.isInteger(mark.end) &&
+        (mark.start as number) >= 0 && (mark.end as number) > (mark.start as number);
+    }) : [],
     windows: Array.isArray(d.windows) ? d.windows.map(mapWindow) : [],
     createdAt: str(d.createdAt),
     updatedAt: str(d.updatedAt),
@@ -188,6 +197,21 @@ export async function updateSalesOrder(
   delete data.ownerId;
   if (input.status === "submitted" && previousStatus !== "submitted") data.submittedAt = now;
   await updateDoc(doc(db, COLLECTION, id), data);
+}
+
+export async function saveSalesPrintEmphasis(
+  id: string,
+  expectedUpdatedAt: string,
+  marks: SalesPrintMark[],
+): Promise<void> {
+  const ref = doc(db, COLLECTION, id);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists() || str(snapshot.data().updatedAt) !== expectedUpdatedAt) {
+      throw new Error("訂單已被更新，請重新載入後再標記。");
+    }
+    transaction.update(ref, { printEmphasis: marks, updatedAt: new Date().toISOString() });
+  });
 }
 
 export async function deleteSalesOrder(id: string): Promise<void> {

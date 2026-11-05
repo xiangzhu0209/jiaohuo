@@ -60,6 +60,15 @@ export interface SalesWindow {
   note: string;
 }
 
+export interface SalesPrintMark {
+  field: string;
+  text: string;
+  start: number;
+  end: number;
+  red?: boolean;
+  bold?: boolean;
+}
+
 export type SalesEditRequestStatus = "" | "pending" | "approved" | "rejected";
 
 export interface SalesOrder {
@@ -88,6 +97,7 @@ export interface SalesOrder {
   editReviewedBy: string;
   /** 管理者核准後維持開放，直到管理者重新鎖定 */
   editApproved: boolean;
+  printEmphasis: SalesPrintMark[];
   windows: SalesWindow[];
   createdAt: string;
   updatedAt: string;
@@ -99,7 +109,7 @@ export interface SalesOrder {
 /** 新增／儲存時寫入的欄位（id 與時間戳記由系統處理）。 */
 export type SalesOrderInput = Omit<
   SalesOrder,
-  "id" | "createdAt" | "updatedAt" | "submittedAt" | "orderedAt" | "orderedBy"
+  "id" | "createdAt" | "updatedAt" | "submittedAt" | "orderedAt" | "orderedBy" | "printEmphasis"
 >;
 
 /* ---------- 固定選項 ---------- */
