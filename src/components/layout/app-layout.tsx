@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { downloadOfflineExport } from "@/lib/db-offline";
-import { fetchSalesOrdersByStatus } from "@/lib/sales-db";
+import { fetchSalesOrdersByStatus, fetchSalesOrdersWithEditRequests } from "@/lib/sales-db";
 import { isAdminEmail } from "@/lib/sales-types";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -111,9 +111,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const { data: pendingCount = 0 } = useQuery({
     queryKey: ["sales-inbox", "submitted"],
     enabled: isAdmin,
-    queryFn: () => fetchSalesOrdersByStatus("submitted"),
+    queryFn: () => Promise.all([
+      fetchSalesOrdersByStatus("submitted"),
+      fetchSalesOrdersWithEditRequests(),
+    ]),
     refetchInterval: 60_000,
-    select: (list) => list.length,
+    select: ([orders, editRequests]) => orders.length + editRequests.length,
   });
 
   return (
