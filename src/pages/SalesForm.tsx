@@ -59,6 +59,7 @@ function SalesFormInner() {
   const [kind, setKind] = useState<SalesKind>("company");
   const [orderDate, setOrderDate] = useState(todayISO());
   const [installTime, setInstallTime] = useState("");
+  const [scheduledInstallTime, setScheduledInstallTime] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -99,6 +100,7 @@ function SalesFormInner() {
     setKind(existing.kind);
     setOrderDate(existing.orderDate || todayISO());
     setInstallTime(existing.installTime);
+    setScheduledInstallTime(existing.scheduledInstallTime);
     setCustomerName(existing.customerName);
     setPhone(existing.phone);
     setAddress(existing.address);
@@ -183,6 +185,7 @@ function SalesFormInner() {
         kind,
         orderDate,
         installTime: installTime.trim(),
+        scheduledInstallTime: scheduledInstallTime.trim(),
         customerName: customerName.trim(),
         phone: phone.trim(),
         address: address.trim(),
@@ -319,15 +322,26 @@ function SalesFormInner() {
             </Field>
           </div>
 
-          <Field label="預計安裝時間">
-            <Input
-              className="h-11 text-base"
-              value={installTime}
-              disabled={readOnly}
-              onChange={(e) => setInstallTime(e.target.value)}
-              placeholder="例如：11/5 下午"
-            />
-          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="預計安裝時間">
+              <Input
+                className="h-11 text-base"
+                value={installTime}
+                disabled={readOnly}
+                onChange={(e) => setInstallTime(e.target.value)}
+                placeholder="例如：11月底"
+              />
+            </Field>
+            <Field label="排定安裝時間">
+              <Input
+                className="h-11 text-base"
+                value={scheduledInstallTime}
+                disabled={readOnly}
+                onChange={(e) => setScheduledInstallTime(e.target.value)}
+                placeholder="例如：11/5 下午 2:00"
+              />
+            </Field>
+          </div>
 
           <Field label="客戶名稱 *">
             <Input
