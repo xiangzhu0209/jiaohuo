@@ -36,8 +36,9 @@ export interface SalesWindow {
   /** 品項（只能從固定清單選） */
   product: string;
   colorCode: string;
-  /** 尺寸單位：公分或台尺 */
-  unit: SizeUnit;
+  /** 寬度與高度各自的尺寸單位；舊單會由共用 unit 欄位回填 */
+  widthUnit: SizeUnit;
+  heightUnit: SizeUnit;
   /** 尺寸：保留使用者輸入的原樣 */
   width: string;
   height: string;
@@ -59,6 +60,8 @@ export interface SalesWindow {
   note: string;
 }
 
+export type SalesEditRequestStatus = "" | "pending" | "approved" | "rejected";
+
 export interface SalesOrder {
   id: string;
   ownerId: string;
@@ -77,6 +80,14 @@ export interface SalesOrder {
   balanceMethod: PayMethod;
   notes: string;
   status: SalesStatus;
+  /** 業務要求修改送出後訂單的狀態與原因 */
+  editRequestStatus: SalesEditRequestStatus;
+  editRequestReason: string;
+  editRequestAt: string;
+  editReviewedAt: string;
+  editReviewedBy: string;
+  /** 管理者核准後維持開放，直到管理者重新鎖定 */
+  editApproved: boolean;
   windows: SalesWindow[];
   createdAt: string;
   updatedAt: string;
@@ -175,7 +186,8 @@ export const newWindow = (): SalesWindow => ({
   space: "",
   product: "",
   colorCode: "",
-  unit: "cm",
+  widthUnit: "cm",
+  heightUnit: "cm",
   width: "",
   height: "",
   listPrice: "",
@@ -237,7 +249,9 @@ export const windowSummary = (w: SalesWindow): string =>
   [
     w.space,
     [w.product, w.colorCode].filter(Boolean).join(" "),
-    w.width || w.height ? `${w.width || "?"}×${w.height || "?"}${UNIT_SHORT[w.unit]}` : "",
+    w.width || w.height
+      ? `${w.width || "?"}${UNIT_SHORT[w.widthUnit]}×${w.height || "?"}${UNIT_SHORT[w.heightUnit]}`
+      : "",
   ]
     .filter(Boolean)
     .join("・");

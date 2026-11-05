@@ -16,6 +16,7 @@ import {
   newWindowId,
   type PayMethod,
   type SalesOrder,
+  type SalesEditRequestStatus,
   type SalesOrderInput,
   type SalesStatus,
   type SalesWindow,
@@ -34,6 +35,7 @@ const pick = <T extends string>(v: unknown, allowed: readonly T[], fallback: T):
 
 const PAY: readonly PayMethod[] = ["", "cash", "transfer"];
 const STATUSES: readonly SalesStatus[] = ["draft", "submitted", "ordered"];
+const EDIT_REQUEST_STATUSES: readonly SalesEditRequestStatus[] = ["", "pending", "approved", "rejected"];
 
 function mapWindow(raw: unknown): SalesWindow {
   const d = (raw ?? {}) as Record<string, unknown>;
@@ -42,7 +44,8 @@ function mapWindow(raw: unknown): SalesWindow {
     space: str(d.space),
     product: str(d.product),
     colorCode: str(d.colorCode),
-    unit: pick(d.unit, ["cm", "tai"] as const, "cm"),
+    widthUnit: pick(d.widthUnit ?? d.unit, ["cm", "tai"] as const, "cm"),
+    heightUnit: pick(d.heightUnit ?? d.unit, ["cm", "tai"] as const, "cm"),
     width: str(d.width),
     height: str(d.height),
     listPrice: str(d.listPrice),
@@ -76,6 +79,12 @@ function mapOrder(id: string, d: DocumentData): SalesOrder {
     balanceMethod: pick(d.balanceMethod, PAY, ""),
     notes: str(d.notes),
     status: pick(d.status, STATUSES, "draft"),
+    editRequestStatus: pick(d.editRequestStatus, EDIT_REQUEST_STATUSES, ""),
+    editRequestReason: str(d.editRequestReason),
+    editRequestAt: str(d.editRequestAt),
+    editReviewedAt: str(d.editReviewedAt),
+    editReviewedBy: str(d.editReviewedBy),
+    editApproved: d.editApproved === true,
     windows: Array.isArray(d.windows) ? d.windows.map(mapWindow) : [],
     createdAt: str(d.createdAt),
     updatedAt: str(d.updatedAt),
@@ -103,6 +112,12 @@ export async function fetchMySalesOrders(uid: string): Promise<SalesOrder[]> {
 /** 管理者用：依狀態取全部業務的單。 */
 export async function fetchSalesOrdersByStatus(status: SalesStatus): Promise<SalesOrder[]> {
   const snap = await getDocs(query(collection(db, COLLECTION), where("status", "==", status)));
+  return snap.docs.map((d) => mapOrder(d.id, d.data())).sort(byRecent);
+}
+
+/** 管理者待審核的訂單修改申請。 */
+export async function fetchSalesOrdersWithEditRequests(): Promise<SalesOrder[]> {
+  const snap = await getDocs(query(collection(db, COLLECTION), where("editRequestStatus", "==", "pending")));
   return snap.docs.map((d) => mapOrder(d.id, d.data())).sort(byRecent);
 }
 
@@ -135,8 +150,15 @@ const toData = (input: SalesOrderInput): DocumentData => ({
   depositMethod: input.depositMethod,
   balanceMethod: input.balanceMethod,
   notes: input.notes,
-  status: input.status,
-  windows: input.windows.map((w) => ({ ...w })),
+    status: input.status,
+    editRequestStatus: input.editRequestStatus,
+    editRequestReason: input.editRequestReason,
+    editRequestAt: input.editRequestAt,
+    editReviewedAt: input.editReviewedAt,
+    editReviewedBy: input.editReviewedBy,
+    editApproved: input.editApproved,
+    windows: input.windows.map((w) => ({ ...w })),
+
 });
 
 export async function createSalesOrder(input: SalesOrderInput): Promise<string> {
@@ -170,6 +192,44 @@ export async function updateSalesOrder(
 
 export async function deleteSalesOrder(id: string): Promise<void> {
   await deleteDoc(doc(db, COLLECTION, id));
+}
+
+/** 業務為已送出的單提出修改申請；申請待審期間訂單維持鎖定。 */
+export async function requestSalesOrderEdit(id: string, reason: string): Promise<void> {
+  const now = new Date().toISOString();
+  await updateDoc(doc(db, COLLECTION, id), {
+    editRequestStatus: "pending",
+    editRequestReason: reason.trim(),
+    editRequestAt: now,
+    editApproved: false,
+    updatedAt: now,
+  });
+}
+
+/** 管理者核准或拒絕修改申請。核准後維持開放，直到管理者手動鎖定。 */
+export async function reviewSalesOrderEdit(
+  id: string,
+  approved: boolean,
+  by: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await updateDoc(doc(db, COLLECTION, id), {
+    editRequestStatus: approved ? "approved" : "rejected",
+    editApproved: approved,
+    editReviewedAt: now,
+    editReviewedBy: by,
+    updatedAt: now,
+  });
+}
+
+/** 管理者重新鎖定已核准開放修改的訂單。 */
+export async function lockSalesOrderEdits(id: string): Promise<void> {
+  const now = new Date().toISOString();
+  await updateDoc(doc(db, COLLECTION, id), {
+    editRequestStatus: "",
+    editApproved: false,
+    updatedAt: now,
+  });
 }
 
 /** 管理者：把幾張單標記為「已下單」。 */
