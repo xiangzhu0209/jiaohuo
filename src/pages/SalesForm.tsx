@@ -251,6 +251,15 @@ function SalesFormInner() {
     windows.forEach((w, i) => {
       if (isBlankWindow(w)) return;
       if (!w.product) issues.push(`第 ${i + 1} 個窗位還沒選品項`);
+      if (w.shape !== "t") {
+        const segmentCount = w.shape === "figure-eight" ? 8 : 2;
+        for (let segment = 0; segment < segmentCount; segment++) {
+          if (!w.shapeLengths[segment]?.trim()) {
+            issues.push(`第 ${i + 1} 個窗位窗型的第 ${segment + 1} 段尺寸尚未填寫`);
+            break;
+          }
+        }
+      }
       if (w.mount === "wall" && w.wallOption === "") {
         issues.push(`第 ${i + 1} 個窗位的壁架請選「上移」或「鎖框」`);
       }
