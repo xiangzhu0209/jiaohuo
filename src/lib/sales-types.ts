@@ -13,6 +13,13 @@ export type SideType = "" | "left" | "right";
 export type MountType = "" | "ceiling" | "wall" | "direct";
 export type WallOption = "" | "shift" | "frame";
 export type SizeUnit = "cm" | "tai";
+export type WindowShape = "t" | "l-left" | "l-right" | "figure-eight";
+export const WINDOW_SHAPE_LABELS: Record<WindowShape, string> = {
+  t: "T型",
+  "l-left": "L型（左）",
+  "l-right": "L型（右）",
+  "figure-eight": "八字型",
+};
 /** 列印種類：留存單（完整）／安裝單（不含牌價） */
 export type PrintVariant = "keep" | "install";
 export type SalesMemberStatus = "pending" | "active" | "disabled";
@@ -33,9 +40,13 @@ export interface SalesWindow {
   id: string;
   /** 空間，例如客廳、主臥（手寫單的「安裝位置」） */
   space: string;
-  /** 品項（只能從固定清單選） */
+  /** 品項：固定選項或自填內容 */
   product: string;
+  productCustom: boolean;
   colorCode: string;
+  /** 窗型與各段邊長（L 型兩段，八角窗八段） */
+  shape: WindowShape;
+  shapeLengths: string[];
   /** 寬度與高度各自的尺寸單位；舊單會由共用 unit 欄位回填 */
   widthUnit: SizeUnit;
   heightUnit: SizeUnit;
@@ -130,6 +141,7 @@ export const SALES_PRODUCTS: string[] = [
 
 /** 只有這個品項才需要填倍數。 */
 export const MULTIPLIER_PRODUCT = "布";
+export const CUSTOM_PRODUCT_VALUE = "__custom_product__";
 
 export const UNIT_LABELS: Record<SizeUnit, string> = { cm: "公分", tai: "台尺" };
 /** 列印在尺寸圖上的簡寫 */
@@ -195,7 +207,10 @@ export const newWindow = (): SalesWindow => ({
   id: newWindowId(),
   space: "",
   product: "",
+  productCustom: false,
   colorCode: "",
+  shape: "t",
+  shapeLengths: [],
   widthUnit: "cm",
   heightUnit: "cm",
   width: "",
@@ -217,9 +232,11 @@ export const isBlankWindow = (w: SalesWindow): boolean =>
   !(
     w.space ||
     w.product ||
+    w.shapeLengths.some((length) => length) ||
     w.colorCode ||
     w.width ||
     w.height ||
+    w.shape !== "t" ||
     w.listPrice ||
     w.panel ||
     w.side ||
@@ -259,6 +276,7 @@ export const windowSummary = (w: SalesWindow): string =>
   [
     w.space,
     [w.product, w.colorCode].filter(Boolean).join(" "),
+    w.shape !== "t" ? WINDOW_SHAPE_LABELS[w.shape] : "",
     w.width || w.height
       ? `${w.width || "?"}${UNIT_SHORT[w.widthUnit]}×${w.height || "?"}${UNIT_SHORT[w.heightUnit]}`
       : "",

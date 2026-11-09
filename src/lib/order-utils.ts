@@ -290,7 +290,9 @@ const SKIP_PROPS = new Set([
 
 /** 把元素（含子孫）目前算出來的樣式全部寫成 inline style。 */
 function inlineStyles(root: HTMLElement): void {
-  const nodes: HTMLElement[] = [root, ...root.querySelectorAll<HTMLElement>("*")];
+  // SVG text is part of the order sheet too: inline its computed color/weight so PNG export
+  // preserves red/bold emphasis without depending on Tailwind classes outside the cloned DOM.
+  const nodes: (HTMLElement | SVGElement)[] = [root, ...root.querySelectorAll<HTMLElement | SVGElement>("*")];
   const snapshot = nodes.map((el) => {
     const cs = getComputedStyle(el);
     const decls: [string, string][] = [];

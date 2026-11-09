@@ -5,7 +5,11 @@ export type SalesSelectionHit = { orderId: string; field: string; text: string; 
 export function collectSalesSelection(range: Range, root: HTMLElement): SalesSelectionHit[] {
   const hits: SalesSelectionHit[] = [];
   for (const element of root.querySelectorAll<HTMLElement | SVGElement>("[data-sales-field]")) {
-    if (!range.intersectsNode(element)) continue;
+    try {
+      if (!range.intersectsNode(element)) continue;
+    } catch {
+      continue;
+    }
     const field = element.getAttribute("data-sales-field");
     const orderId = element.closest("[data-sales-order]")?.getAttribute("data-sales-order");
     const text = element.textContent ?? "";
