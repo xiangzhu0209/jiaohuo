@@ -22,50 +22,73 @@ import { SalesText } from "@/components/order/sales-emphasis";
 
 const money = (n: number): string => (n > 0 ? fmtMoney(n) : "—");
 
-/** 尺寸草圖：T 型、左右 L 型或依八個分段尺寸呈現八字型。 */
+/**
+ * 尺寸草圖：橫桿（寬）＋中間直桿（高）。
+ * L 型：橫桿一端多一隻短腳；八字型：橫桿兩端各一隻短腳。數字直接標在對應線段旁。
+ */
 function TFigure({ width, height, widthUnit, heightUnit, compact, win, order }: {
   width: string; height: string; widthUnit: SizeUnit; heightUnit: SizeUnit;
   compact: boolean; win: SalesWindow; order: SalesOrder;
 }) {
   const widthSymbol = UNIT_SHORT[widthUnit];
   const heightSymbol = UNIT_SHORT[heightUnit];
-  const shapeField = (i: number) => `window:${win.id}:shapeLength:${i}`;
-  const segmentCount = win.shape === "figure-eight" ? 8 : win.shape === "t" ? 0 : 2;
   const line = (x1: number, y1: number, x2: number, y2: number) =>
     <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="3" strokeLinecap="round" />;
+  const marks = order.printEmphasis;
+  const widthText = (fontSize: number, x: number, y: number) => (
+    <text x={x} y={y} textAnchor="middle" fontSize={fontSize} fill="currentColor">
+      寬 {width && <SalesText svg text={`${width}${widthSymbol}`} field={`window:${win.id}:width`} marks={marks} />}
+    </text>
+  );
+  const heightText = (fontSize: number, x: number, y: number) => (
+    <text x={x} y={y} fontSize={fontSize} fill="currentColor">
+      高 {height && <SalesText svg text={`${height}${heightSymbol}`} field={`window:${win.id}:height`} marks={marks} />}
+    </text>
+  );
+  // 腳長：位置依窗型決定；沒填時顯示「腳」佔位
+  const sideText = (index: number, x: number, y: number, anchor: "start" | "end") => (
+    <text x={x} y={y} textAnchor={anchor} fontSize={11} fill="currentColor">
+      {win.shapeLengths[index]
+        ? <SalesText svg text={`${win.shapeLengths[index]}${widthSymbol}`} field={`window:${win.id}:shapeLength:${index}`} marks={marks} />
+        : "腳"}
+    </text>
+  );
   return (
     <div className={cn("shrink-0 self-start text-foreground", compact ? "w-[33mm]" : "w-[42mm]")}>
-    <svg viewBox="0 0 180 112" role="img" aria-label={WINDOW_SHAPE_LABELS[win.shape]} className="w-full overflow-visible">
-      {win.shape === "t" ? (
-        <>
-          {line(8, 42, 112, 42)}{line(60, 42, 60, 112)}
-          <text x="60" y="30" textAnchor="middle" fontSize="13" fill="currentColor">
-            寬 {width && <SalesText svg text={`${width}${widthSymbol}`} field={`window:${win.id}:width`} marks={order.printEmphasis} />}
-          </text>
-          <text x="68" y="82" fontSize="13" fill="currentColor">
-            高 {height && <SalesText svg text={`${height}${heightSymbol}`} field={`window:${win.id}:height`} marks={order.printEmphasis} />}
-          </text>
-        </>
-      ) : (
-        <>
-          {line(12, 38, 142, 38)}
-          {win.shape === "l-left" && <>{line(28, 38, 28, 72)}{line(86, 38, 86, 102)}</>}
-          {win.shape === "l-right" && <>{line(68, 38, 68, 102)}{line(128, 38, 128, 72)}</>}
-          {win.shape === "figure-eight" && <>{line(26, 38, 26, 70)}{line(78, 38, 78, 108)}{line(130, 38, 130, 70)}
-            {[1, 2, 3, 4, 5].map((n) => <text key={n} x={6 + n * 25} y="51" fontSize="8" fill="currentColor">{n}</text>)}
-            <text x="30" y="64" fontSize="8" fill="currentColor">6</text><text x="82" y="91" fontSize="8" fill="currentColor">7</text><text x="134" y="64" fontSize="8" fill="currentColor">8</text>
-          </>}
-          {win.shape === "l-left" && <><text x="30" y="66" fontSize="8" fill="currentColor">1</text><text x="88" y="96" fontSize="8" fill="currentColor">2</text></>}
-          {win.shape === "l-right" && <><text x="72" y="96" fontSize="8" fill="currentColor">1</text><text x="132" y="66" fontSize="8" fill="currentColor">2</text></>}
-          <text x="78" y="27" textAnchor="middle" fontSize="12" fill="currentColor">
-            寬 {width && <SalesText svg text={`${width}${widthSymbol}`} field={`window:${win.id}:width`} marks={order.printEmphasis} />}
-          </text>
-          <text x="86" y="70" fontSize="12" fill="currentColor">
-            高 {height && <SalesText svg text={`${height}${heightSymbol}`} field={`window:${win.id}:height`} marks={order.printEmphasis} />}
-          </text>
-        </>
-      )}
-    </svg>
+      <svg viewBox="0 0 180 120" role="img" aria-label={WINDOW_SHAPE_LABELS[win.shape]} className="w-full overflow-visible">
+        {win.shape === "t" && (
+          <>
+            {line(8, 42, 112, 42)}{line(60, 42, 60, 112)}
+            {widthText(13, 60, 30)}
+            {heightText(13, 68, 82)}
+          </>
+        )}
+        {win.shape === "l-left" && (
+          <>
+            {line(44, 42, 150, 42)}{line(44, 42, 44, 82)}{line(104, 42, 104, 112)}
+            {widthText(12, 97, 30)}
+            {sideText(0, 38, 66, "end")}
+            {heightText(12, 110, 82)}
+          </>
+        )}
+        {win.shape === "l-right" && (
+          <>
+            {line(30, 42, 136, 42)}{line(136, 42, 136, 82)}{line(76, 42, 76, 112)}
+            {widthText(12, 83, 30)}
+            {sideText(0, 142, 66, "start")}
+            {heightText(12, 82, 82)}
+          </>
+        )}
+        {win.shape === "figure-eight" && (
+          <>
+            {line(40, 42, 140, 42)}{line(40, 42, 40, 82)}{line(140, 42, 140, 82)}{line(90, 42, 90, 112)}
+            {widthText(12, 90, 30)}
+            {sideText(0, 34, 66, "end")}
+            {sideText(1, 146, 66, "start")}
+            {heightText(12, 96, 96)}
+          </>
+        )}
+      </svg>
     </div>
   );
 }
@@ -151,15 +174,6 @@ function WindowCell({
         win={w}
         order={order}
       />
-      {w.shape !== "t" && (
-        <div className="grid w-full grid-cols-4 gap-x-2 gap-y-0.5 border-t border-foreground/30 pt-1 text-[10px] leading-tight">
-          {Array.from({ length: w.shape === "figure-eight" ? 8 : 2 }, (_, i) => (
-            <span key={i} className="whitespace-nowrap">
-              第{i + 1}段：<SalesText text={`${w.shapeLengths[i] || "—"}${UNIT_SHORT[w.widthUnit]}`} field={`window:${w.id}:shapeLength:${i}`} marks={order.printEmphasis} />
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CUSTOM_PRODUCT_VALUE,
+  SHAPE_SIDE_LABELS,
   MOUNT_LABELS,
   MULTIPLIER_PRODUCT,
   PANEL_LABELS,
@@ -217,8 +218,8 @@ export default function WindowCard({
           </Field>
           {win.shape !== "t" && (
             <div className="grid grid-cols-2 gap-3 rounded-lg border border-dashed border-border p-3">
-              {Array.from({ length: win.shape === "figure-eight" ? 8 : 2 }, (_, i) => (
-                <Field key={i} label={`${win.shape === "figure-eight" ? `第 ${i + 1} 段` : i === 0 ? "轉角段" : "主窗段"}（${UNIT_LABELS[win.widthUnit]}）`}>
+              {SHAPE_SIDE_LABELS[win.shape].map((sideLabel, i) => (
+                <Field key={sideLabel} label={`${sideLabel}（${UNIT_LABELS[win.widthUnit]}）`}>
                   <Input
                     className={inputClass}
                     inputMode="decimal"
@@ -229,7 +230,7 @@ export default function WindowCard({
                       shapeLengths[i] = digitsOnly(e.target.value);
                       onChange({ shapeLengths });
                     }}
-                    placeholder="段長"
+                    placeholder="邊長"
                   />
                 </Field>
               ))}
