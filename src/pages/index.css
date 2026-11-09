@@ -1,4 +1,4 @@
-
+    
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -172,6 +172,8 @@ body,
 
 /* ---------- 紙張預覽：無論深淺色模式都維持白紙黑字 ---------- */
 .paper-sheet {
+  -webkit-user-select: text;
+  user-select: text;
   --background: 0 0% 100%;
   --foreground: 0 0% 0%;
   --card: 0 0% 100%;
@@ -375,3 +377,5 @@ body,
     --gradient-brand: none;
   }
 }
+
+    
