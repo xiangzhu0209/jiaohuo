@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  CUSTOM_PRODUCT_VALUE,
   MOUNT_LABELS,
   MULTIPLIER_PRODUCT,
   PANEL_LABELS,
@@ -15,9 +16,11 @@ import {
   SALES_PRODUCTS,
   SIDE_LABELS,
   UNIT_LABELS,
+  WINDOW_SHAPE_LABELS,
   digitsOnly,
   windowSummary,
   type SalesWindow,
+  type WindowShape,
 } from "@/lib/sales-types";
 import { cn } from "@/lib/utils";
 
@@ -166,23 +169,32 @@ export default function WindowCard({
           <div className="grid grid-cols-2 gap-3">
             <Field label="品項">
               <Select
-                value={win.product}
+                value={win.productCustom ? CUSTOM_PRODUCT_VALUE : win.product}
                 disabled={disabled}
-                onValueChange={(v) =>
-                  onChange(v === MULTIPLIER_PRODUCT ? { product: v } : { product: v, multiplier: "" })
-                }
+                onValueChange={(v) => {
+                  if (v === CUSTOM_PRODUCT_VALUE) onChange({ productCustom: true, product: "", multiplier: "" });
+                  else onChange({ productCustom: false, product: v, ...(v === MULTIPLIER_PRODUCT ? {} : { multiplier: "" }) });
+                }}
               >
                 <SelectTrigger className={inputClass}>
                   <SelectValue placeholder="選擇品項" />
                 </SelectTrigger>
                 <SelectContent>
                   {SALES_PRODUCTS.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {p}
-                    </SelectItem>
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
                   ))}
+                  <SelectItem value={CUSTOM_PRODUCT_VALUE}>自填品項</SelectItem>
                 </SelectContent>
               </Select>
+              {win.productCustom && (
+                <Input
+                  className={inputClass}
+                  value={win.product}
+                  disabled={disabled}
+                  onChange={(e) => onChange({ product: e.target.value })}
+                  placeholder="輸入品項名稱"
+                />
+              )}
             </Field>
             <Field label="色號">
               <Input
@@ -194,6 +206,35 @@ export default function WindowCard({
               />
             </Field>
           </div>
+
+          <Field label="窗型">
+            <Choice
+              value={win.shape}
+              options={entries(WINDOW_SHAPE_LABELS)}
+              disabled={disabled}
+              onChange={(shape) => onChange({ shape: (shape || "t") as WindowShape, shapeLengths: [] })}
+            />
+          </Field>
+          {win.shape !== "t" && (
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-dashed border-border p-3">
+              {Array.from({ length: win.shape === "figure-eight" ? 8 : 2 }, (_, i) => (
+                <Field key={i} label={`${win.shape === "figure-eight" ? `第 ${i + 1} 段` : i === 0 ? "轉角段" : "主窗段"}（${UNIT_LABELS[win.widthUnit]}）`}>
+                  <Input
+                    className={inputClass}
+                    inputMode="decimal"
+                    value={win.shapeLengths[i] ?? ""}
+                    disabled={disabled}
+                    onChange={(e) => {
+                      const shapeLengths = [...win.shapeLengths];
+                      shapeLengths[i] = digitsOnly(e.target.value);
+                      onChange({ shapeLengths });
+                    }}
+                    placeholder="段長"
+                  />
+                </Field>
+              ))}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="寬">

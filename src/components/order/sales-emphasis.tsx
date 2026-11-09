@@ -16,7 +16,7 @@ function emphasisParts(text: string, field: string, marks: SalesPrintMark[]) {
     while (end < text.length && chars[end].red === chars[i].red && chars[end].bold === chars[i].bold) end++;
     result.push(
       <Fragment key={i}>
-        <tspan className={cn(chars[i].red && "text-destructive", chars[i].bold && "font-bold")} fill="currentColor">
+        <tspan className={cn("cursor-text select-text", chars[i].red && "text-destructive", chars[i].bold && "font-bold")} fill="currentColor">
           {text.slice(i, end)}
         </tspan>
       </Fragment>,
@@ -42,7 +42,7 @@ export function SalesText({ text, field, marks, svg = false }: {
     let end = i + 1;
     while (end < text.length && relevant.some((m) => m.red && m.start <= end && end < m.end) === red &&
       relevant.some((m) => m.bold && m.start <= end && end < m.end) === bold) end++;
-    parts.push(<span key={i} className={cn(red && "text-destructive", bold && "font-bold")}>{text.slice(i, end)}</span>);
+    parts.push(<span key={i} className={cn("cursor-text select-text", red && "text-destructive", bold && "font-bold")}>{text.slice(i, end)}</span>);
     i = end;
   }
   return <span data-sales-field={field}>{parts}</span>;
