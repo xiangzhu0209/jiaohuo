@@ -20,7 +20,14 @@ export const WINDOW_SHAPE_LABELS: Record<WindowShape, string> = {
   "l-right": "L型（右）",
   "figure-eight": "八字型",
 };
-/** 列印種類：留存單（完整）／安裝單（不含牌價） */
+
+/** L 型多一個轉角邊，八字型左右各一個；寬、高仍是原本兩個尺寸。 */
+export const SHAPE_SIDE_LABELS: Record<WindowShape, string[]> = {
+  t: [],
+  "l-left": ["左側轉角邊長"],
+  "l-right": ["右側轉角邊長"],
+  "figure-eight": ["左側邊長", "右側邊長"],
+};
 export type PrintVariant = "keep" | "install";
 export type SalesMemberStatus = "pending" | "active" | "disabled";
 

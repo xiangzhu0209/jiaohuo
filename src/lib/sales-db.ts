@@ -48,7 +48,7 @@ function mapWindow(raw: unknown): SalesWindow {
     productCustom: d.productCustom === true,
     colorCode: str(d.colorCode),
     shape: pick(d.shape, ["t", "l-left", "l-right", "figure-eight"] as const, "t"),
-    shapeLengths: Array.isArray(d.shapeLengths) ? d.shapeLengths.map(str).slice(0, 8) : [],
+    shapeLengths: Array.isArray(d.shapeLengths) ? d.shapeLengths.map(str).slice(0, 2) : [],
     widthUnit: pick(d.widthUnit ?? d.unit, ["cm", "tai"] as const, "cm"),
     heightUnit: pick(d.heightUnit ?? d.unit, ["cm", "tai"] as const, "cm"),
     width: str(d.width),
