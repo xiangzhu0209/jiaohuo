@@ -243,10 +243,10 @@ function PrintInner() {
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
           <span className="text-sm text-muted-foreground">重點字：</span>
-          <Button variant="outline" size="sm" disabled={marking} onMouseDown={(e) => e.preventDefault()} onClick={() => void markSelection("red")}>
+          <Button variant="outline" size="sm" disabled={marking} onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()} onClick={() => void markSelection("red")}>
             <Type className="size-4 text-destructive" /> 紅字
           </Button>
-          <Button variant="outline" size="sm" disabled={marking} onMouseDown={(e) => e.preventDefault()} onClick={() => void markSelection("bold")}>
+          <Button variant="outline" size="sm" disabled={marking} onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()} onClick={() => void markSelection("bold")}>
             <Bold className="size-4" /> 加粗
           </Button>
           <Button variant="outline" size="sm" disabled={marking} onMouseDown={(e) => e.preventDefault()} onClick={() => void markSelection("clear")}>
