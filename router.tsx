@@ -9,6 +9,13 @@ import BatchPrint from "./pages/BatchPrint";
 import Reconciliation from "./pages/Reconciliation";
 import Vendors from "./pages/Vendors";
 import Prices from "./pages/Prices";
+import Setup from "./pages/Setup";
+import SalesOrders from "./pages/SalesOrders";
+import SalesForm from "./pages/SalesForm";
+import SalesInbox from "./pages/SalesInbox";
+import SalesMembers from "./pages/SalesMembers";
+import SalesPending from "./pages/SalesPending";
+import SalesPrint from "./pages/SalesPrint";
 import NotFound from "./pages/NotFound";
 
 export const routers = [
@@ -39,6 +46,15 @@ export const routers = [
       { path: "reconciliation", name: "reconciliation", element: <Reconciliation /> },
       { path: "vendors", name: "vendors", element: <Vendors /> },
       { path: "prices", name: "prices", element: <Prices /> },
+      { path: "setup", name: "setup", element: <Setup /> },
+      { path: "sales", name: "sales-orders", element: <SalesOrders /> },
+      { path: "sales/new", name: "sales-new", element: <SalesForm /> },
+      { path: "sales/measure/new", name: "sales-measure-new", element: <SalesForm /> },
+      { path: "sales/inbox", name: "sales-inbox", element: <SalesInbox /> },
+      { path: "sales/members", name: "sales-members", element: <SalesMembers /> },
+      { path: "sales/pending", name: "sales-pending", element: <SalesPending /> },
+      { path: "sales/print", name: "sales-print", element: <SalesPrint /> },
+      { path: "sales/:id/edit", name: "sales-edit", element: <SalesForm /> },
     ],
   },
   /* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */
