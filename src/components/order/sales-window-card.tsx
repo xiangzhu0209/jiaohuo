@@ -19,6 +19,7 @@ import {
   UNIT_LABELS,
   WINDOW_SHAPE_LABELS,
   digitsOnly,
+  supportsLeadWeight,
   windowSummary,
   type SalesWindow,
   type WindowShape,
@@ -173,8 +174,13 @@ export default function WindowCard({
                 value={win.productCustom ? CUSTOM_PRODUCT_VALUE : win.product}
                 disabled={disabled}
                 onValueChange={(v) => {
-                  if (v === CUSTOM_PRODUCT_VALUE) onChange({ productCustom: true, product: "", multiplier: "" });
-                  else onChange({ productCustom: false, product: v, ...(v === MULTIPLIER_PRODUCT ? {} : { multiplier: "" }) });
+                  if (v === CUSTOM_PRODUCT_VALUE) onChange({ productCustom: true, product: "", multiplier: "", leadWeight: false });
+                  else onChange({
+                    productCustom: false,
+                    product: v,
+                    ...(v === MULTIPLIER_PRODUCT ? {} : { multiplier: "" }),
+                    ...(supportsLeadWeight(v) ? {} : { leadWeight: false }),
+                  });
                 }}
               >
                 <SelectTrigger className={inputClass}>
@@ -206,6 +212,21 @@ export default function WindowCard({
                 placeholder="色號"
               />
             </Field>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {supportsLeadWeight(win.product) && (
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-primary/50 bg-primary/5 px-3 py-2.5 text-base">
+                <Checkbox className="size-5" checked={win.leadWeight} disabled={disabled}
+                  onCheckedChange={(v) => onChange({ leadWeight: v === true })} />
+                加鉛條
+              </label>
+            )}
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-primary/50 bg-primary/5 px-3 py-2.5 text-base">
+              <Checkbox className="size-5" checked={win.fireProof} disabled={disabled}
+                onCheckedChange={(v) => onChange({ fireProof: v === true })} />
+              開防焰證明
+            </label>
           </div>
 
           <Field label="窗型">
