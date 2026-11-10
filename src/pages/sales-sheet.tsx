@@ -8,8 +8,10 @@ import {
   SIDE_LABELS,
   UNIT_SHORT,
   VARIANT_LABELS,
+  WINDOW_SHAPE_LABELS,
   balanceOf,
   mountText,
+  supportsLeadWeight,
   type PayMethod,
   type PrintVariant,
   type SizeUnit,
@@ -17,38 +19,78 @@ import {
   type SalesWindow,
 } from "@/lib/sales-types";
 import { cn } from "@/lib/utils";
+import { SalesText } from "@/components/order/sales-emphasis";
 
 const money = (n: number): string => (n > 0 ? fmtMoney(n) : "—");
 
-/** T 字尺寸圖：橫桿上方寫寬，直桿旁邊寫高（對應手寫單上的 T 字）。 */
-function TFigure({
-  width,
-  height,
-  unit,
-  compact,
-}: {
-  width: string;
-  height: string;
-  unit: SizeUnit;
-  compact: boolean;
+/**
+ * 尺寸草圖：橫桿（寬）＋中間直桿（高）。
+ * L 型：橫桿一端多一隻短腳；八字型：橫桿兩端各一隻短腳。數字直接標在對應線段旁。
+ */
+function TFigure({ width, height, widthUnit, heightUnit, compact, win, order }: {
+  width: string; height: string; widthUnit: SizeUnit; heightUnit: SizeUnit;
+  compact: boolean; win: SalesWindow; order: SalesOrder;
 }) {
-  const u = UNIT_SHORT[unit];
+  const widthSymbol = UNIT_SHORT[widthUnit];
+  const heightSymbol = UNIT_SHORT[heightUnit];
+  const line = (x1: number, y1: number, x2: number, y2: number) =>
+    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="3" strokeLinecap="round" />;
+  const marks = order.printEmphasis;
+  const widthText = (fontSize: number, x: number, y: number) => (
+    <text x={x} y={y} textAnchor="middle" fontSize={fontSize} fill="currentColor">
+      寬 {width && <SalesText svg text={`${width}${widthSymbol}`} field={`window:${win.id}:width`} marks={marks} />}
+    </text>
+  );
+  const heightText = (fontSize: number, x: number, y: number) => (
+    <text x={x} y={y} fontSize={fontSize} fill="currentColor">
+      高 {height && <SalesText svg text={`${height}${heightSymbol}`} field={`window:${win.id}:height`} marks={marks} />}
+    </text>
+  );
+  // 腳長：位置依窗型決定；沒填時顯示「腳」佔位
+  const sideText = (index: number, x: number, y: number, anchor: "start" | "end") => (
+    <text x={x} y={y} textAnchor={anchor} fontSize={14} fill="currentColor">
+      {win.shapeLengths[index]
+        ? <SalesText svg text={`${win.shapeLengths[index]}${widthSymbol}`} field={`window:${win.id}:shapeLength:${index}`} marks={marks} />
+        : "腳"}
+    </text>
+  );
   return (
-    <svg
-      viewBox="0 0 150 112"
-      role="img"
-      aria-label="尺寸圖"
-      className={cn("shrink-0 self-start text-foreground", compact ? "w-[29mm]" : "w-[37mm]")}
-    >
-      <line x1="8" y1="30" x2="112" y2="30" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      <line x1="60" y1="30" x2="60" y2="104" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-      <text x="60" y="21" textAnchor="middle" fontSize="14" fill="currentColor">
-        {width ? `寬 ${width}${u}` : "寬"}
-      </text>
-      <text x="67" y="72" fontSize="14" fill="currentColor">
-        {height ? `高 ${height}${u}` : "高"}
-      </text>
-    </svg>
+    <div className={cn("shrink-0 self-start text-foreground", compact ? "w-[36mm]" : "w-[45mm]")}>
+      <svg viewBox="0 0 180 120" role="img" aria-label={WINDOW_SHAPE_LABELS[win.shape]} className="w-full overflow-visible">
+        {win.shape === "t" && (
+          <>
+            {line(8, 42, 112, 42)}{line(60, 42, 60, 112)}
+            {widthText(17, 60, 30)}
+            {heightText(17, 68, 82)}
+          </>
+        )}
+        {win.shape === "l-left" && (
+          <>
+            {line(44, 42, 150, 42)}{line(44, 42, 44, 82)}{line(104, 42, 104, 112)}
+            {widthText(16, 97, 30)}
+            {sideText(0, 38, 66, "end")}
+            {heightText(16, 110, 82)}
+          </>
+        )}
+        {win.shape === "l-right" && (
+          <>
+            {line(30, 42, 136, 42)}{line(136, 42, 136, 82)}{line(76, 42, 76, 112)}
+            {widthText(16, 83, 30)}
+            {sideText(0, 142, 66, "start")}
+            {heightText(16, 82, 82)}
+          </>
+        )}
+        {win.shape === "figure-eight" && (
+          <>
+            {line(40, 42, 140, 42)}{line(40, 42, 40, 82)}{line(140, 42, 140, 82)}{line(90, 42, 90, 112)}
+            {widthText(16, 90, 30)}
+            {sideText(0, 34, 66, "end")}
+            {sideText(1, 146, 66, "start")}
+            {heightText(16, 96, 96)}
+          </>
+        )}
+      </svg>
+    </div>
   );
 }
 
@@ -66,7 +108,9 @@ function WindowCell({
   label,
   compact,
   variant,
+  order,
 }: {
+  order: SalesOrder;
   w: SalesWindow;
   label: string;
   compact: boolean;
@@ -78,10 +122,15 @@ function WindowCell({
   // 編號長得像 3-1 就代表和別的窗位是同一窗
   const grouped = label.includes("-");
   const showPrice = variant === "keep";
+  // 加鉛條只有布、紗才有；換成別的品項時就算舊資料還勾著也不印
+  const showLead = w.leadWeight && supportsLeadWeight(w.product);
+  const field = (name: string, text: string) => text
+    ? <SalesText text={text} field={`window:${w.id}:${name}`} marks={order.printEmphasis} />
+    : "—";
   return (
     <div
       className={cn(
-        "flex min-w-0 gap-1.5 [break-inside:avoid]",
+        "flex min-w-0 flex-wrap gap-1.5 [break-inside:avoid]",
         grouped ? "border-2 border-foreground" : "border",
         compact ? "min-h-[38mm] p-1.5" : "min-h-[51mm] p-2",
       )}
@@ -91,32 +140,57 @@ function WindowCell({
           <span className={cn("mr-1 font-normal", grouped ? "text-destructive" : "text-muted-foreground")}>
             {label}.
           </span>
-          {w.product || "—"}
-          {w.colorCode ? `：${w.colorCode}` : ""}
-          {grouped && (
-            <span className="ml-1.5 border border-destructive px-1 text-[0.8em] font-semibold text-destructive">
-              同一窗 {label.split("-")[0]}
-            </span>
+          {field("product", w.product)}
+          {(w.colorCode || w.fireProof || showLead) && (
+            <>
+              ：
+              {w.fireProof ? (
+                // 開防焰證明：色號整段紅字，後面自動加（防焰證明）
+                <span className="text-destructive">
+                  {w.colorCode && field("colorCode", w.colorCode)}
+                  (防焰證明)
+                </span>
+              ) : (
+                w.colorCode && field("colorCode", w.colorCode)
+              )}
+              {showLead && <span className="ml-1.5 text-destructive">加鉛條</span>}
+            </>
           )}
         </p>
-        <Line label="空間">{w.space || "—"}</Line>
-        <Line label="開法">{open || "—"}</Line>
-        <Line label="鎖點">{mountText(w) || "—"}</Line>
+        {w.shape !== "t" && <Line label="窗型">{field("shape", WINDOW_SHAPE_LABELS[w.shape])}</Line>}
+        <Line label="空間">
+          {field("space", w.space)}
+          {grouped && (
+            <span className="ml-1.5 border border-destructive px-1 text-[0.8em] font-semibold text-destructive">
+              {field("sameWindow", `同一窗 ${label.split("-")[0]}`)}
+            </span>
+          )}
+        </Line>
+        <Line label="開法">{field("open", open)}</Line>
+        <Line label="鎖點">{field("mount", mountText(w))}</Line>
         {showPrice && (
           <Line label="牌價">
-            {w.listPrice ? fmtMoney(Number(w.listPrice)) : "—"}
+            {field("listPrice", w.listPrice ? fmtMoney(Number(w.listPrice)) : "")}
             {w.product === MULTIPLIER_PRODUCT && (
               <span className="ml-3">
                 <span className="text-muted-foreground">倍數：</span>
-                {w.multiplier || "—"}
+                {field("multiplier", w.multiplier)}
               </span>
             )}
           </Line>
         )}
-        <Line label="製作備註">{w.note || "—"}</Line>
-        <Line label="安裝備註">{w.installNote || "—"}</Line>
+        <Line label="製作備註">{field("note", w.note)}</Line>
+        <Line label="安裝備註">{field("installNote", w.installNote)}</Line>
       </div>
-      <TFigure width={w.width} height={w.height} unit={w.unit} compact={compact} />
+      <TFigure
+        width={w.width}
+        height={w.height}
+        widthUnit={w.widthUnit}
+        heightUnit={w.heightUnit}
+        compact={compact}
+        win={w}
+        order={order}
+      />
     </div>
   );
 }
@@ -128,6 +202,18 @@ const valueCell = (compact: boolean) => cn(cellBase, "break-words", compact ? "p
 
 const payText = (method: PayMethod) => (method ? PAY_LABELS[method] : "");
 
+/** 沒填的欄位留一段底線空白，方便之後用手寫。 */
+function HandwriteBlank({ compact }: { compact: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn("inline-block border-b border-foreground align-bottom", compact ? "w-[34mm]" : "w-[44mm]")}
+    >
+      &nbsp;
+    </span>
+  );
+}
+
 function OrderHeader({
   order,
   compact,
@@ -138,6 +224,9 @@ function OrderHeader({
   variant: PrintVariant;
 }) {
   const balance = balanceOf(order.total, order.deposit);
+  const field = (name: string, text: string) => text
+    ? <SalesText text={text} field={`header:${name}`} marks={order.printEmphasis} />
+    : "—";
   const L = labelCell(compact);
   const V = valueCell(compact);
   return (
@@ -145,46 +234,53 @@ function OrderHeader({
       <div className="flex flex-wrap items-end justify-between gap-x-4">
         <p>
           <span className="mr-3 border border-foreground px-1.5 font-semibold">{VARIANT_LABELS[variant]}</span>
-          <span className="font-semibold">{KIND_LABELS[order.kind]}</span>
-          <span className="ml-3">負責人：{order.person || "—"}</span>
+          <span className="font-semibold">{field("kind", KIND_LABELS[order.kind])}</span>
+          <span className="ml-3">負責人：{field("person", order.person)}</span>
         </p>
-        <div className="flex flex-wrap justify-end gap-x-4 gap-y-0.5 text-right">
-          <p>預計安裝時間：{order.installTime || "—"}</p>
-          <p>排定安裝時間：{order.scheduledInstallTime || "—"}</p>
+        <div className="flex flex-wrap justify-start gap-x-4 gap-y-0.5">
+          <p>預計安裝時間：{field("installTime", order.installTime)}</p>
+          <p>
+            排定安裝時間：
+            {order.scheduledInstallTime ? (
+              field("scheduledInstallTime", order.scheduledInstallTime)
+            ) : (
+              <HandwriteBlank compact={compact} />
+            )}
+          </p>
         </div>
       </div>
 
       <div className="flex items-stretch">
         <div className="grid min-w-0 flex-1 grid-cols-[auto_auto_auto_minmax(0,1fr)_auto_auto] border-b border-r">
           <div className={L}>日期</div>
-          <div className={cn(V, "whitespace-nowrap")}>{order.orderDate || "—"}</div>
+          <div className={cn(V, "whitespace-nowrap")}>{field("orderDate", order.orderDate)}</div>
           <div className={L}>客戶名</div>
-          <div className={V}>{order.customerName || "—"}</div>
+          <div className={V}>{field("customerName", order.customerName)}</div>
           <div className={L}>電話</div>
-          <div className={cn(V, "whitespace-nowrap")}>{order.phone || "—"}</div>
+          <div className={cn(V, "whitespace-nowrap")}>{field("phone", order.phone)}</div>
           <div className={L}>地址</div>
-          <div className={cn(V, "col-span-5")}>{order.address || "—"}</div>
+          <div className={cn(V, "col-span-5")}>{field("address", order.address)}</div>
         </div>
         <div className="grid w-[38%] shrink-0 grid-cols-[auto_minmax(0,1fr)] border-b border-r">
           <div className={L}>總價</div>
-          <div className={cn(V, "text-right tabular-nums")}>{money(order.total)}</div>
+          <div className={cn(V, "text-left tabular-nums")}>{field("total", money(order.total))}</div>
           <div className={L}>訂金</div>
-          <div className={cn(V, "flex justify-between gap-2 tabular-nums")}>
-            <span>{money(order.deposit)}</span>
-            <span>{payText(order.depositMethod)}</span>
+          <div className={cn(V, "flex justify-start gap-2 tabular-nums")}>
+            <span>{field("deposit", money(order.deposit))}</span>
+            <span>{order.depositMethod ? field("depositMethod", payText(order.depositMethod)) : ""}</span>
           </div>
           <div className={L}>尾款</div>
-          <div className={cn(V, "flex justify-between gap-2 tabular-nums")}>
-            <span>{order.total > 0 ? fmtMoney(balance) : "—"}</span>
-            <span>{payText(order.balanceMethod)}</span>
+          <div className={cn(V, "flex justify-start gap-2 tabular-nums")}>
+            <span>{field("balance", order.total > 0 ? fmtMoney(balance) : "")}</span>
+            <span>{order.balanceMethod ? field("balanceMethod", payText(order.balanceMethod)) : ""}</span>
           </div>
         </div>
       </div>
 
-      <p className="break-words">
-        <span className="text-muted-foreground">訂單備註：</span>
-        {order.notes || "—"}
-      </p>
+      <div className="min-h-8 break-words border border-foreground/60 px-2 py-1">
+        <span className="font-medium">訂單備註：</span>
+        {field("notes", order.notes)}
+      </div>
     </div>
   );
 }
@@ -214,6 +310,7 @@ export default function SalesPage({
   const compact = paper === "a5l";
   return (
     <div
+      data-sales-order={order.id}
       className={cn(
         "paper-sheet flex flex-col bg-card text-card-foreground",
         "rounded-lg border shadow-elegant print:rounded-none print:border-0 print:shadow-none",
@@ -230,7 +327,9 @@ export default function SalesPage({
             <span className="ml-3">日期：{order.orderDate || "—"}（續）</span>
           </span>
           <span className="ml-3">預計安裝：{order.installTime || "—"}</span>
-          <span className="ml-3">排定安裝：{order.scheduledInstallTime || "—"}</span>
+          <span className="ml-3">
+            排定安裝：{order.scheduledInstallTime || <HandwriteBlank compact={compact} />}
+          </span>
         </p>
       )}
 
@@ -239,7 +338,7 @@ export default function SalesPage({
       ) : (
         <div className={cn("grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)]", compact ? "gap-1.5" : "gap-2")}>
           {windows.map((w, i) => (
-            <WindowCell key={w.id} w={w} label={labels[i] ?? String(i + 1)} compact={compact} variant={variant} />
+            <WindowCell key={w.id} order={order} w={w} label={labels[i] ?? String(i + 1)} compact={compact} variant={variant} />
           ))}
         </div>
       )}
