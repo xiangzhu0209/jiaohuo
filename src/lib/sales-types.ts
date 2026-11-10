@@ -28,7 +28,7 @@ export const SHAPE_SIDE_LABELS: Record<WindowShape, string[]> = {
   "l-right": ["右側轉角邊長"],
   "figure-eight": ["左側邊長", "右側邊長"],
 };
-export type PrintVariant = "keep" | "install";
+export type PrintVariant = "keep" | "install" | "measure";
 export type SalesMemberStatus = "pending" | "active" | "disabled";
 
 /** 業務帳號的管理狀態。 */
@@ -111,6 +111,11 @@ export interface SalesOrder {
   balanceMethod: PayMethod;
   notes: string;
   status: SalesStatus;
+  /**
+   * 丈量單：只記客戶資料、尺寸與鎖點的草稿，其他欄位等確認下單再補。
+   * 狀態仍是 draft（不進待下單區），轉成正式業務單時改成 false。
+   */
+  measureOnly: boolean;
   /** 業務要求修改送出後訂單的狀態與原因 */
   editRequestStatus: SalesEditRequestStatus;
   editRequestReason: string;
@@ -165,6 +170,7 @@ export const UNIT_SHORT: Record<SizeUnit, string> = { cm: "cm", tai: "尺" };
 export const VARIANT_LABELS: Record<PrintVariant, string> = {
   keep: "留存單",
   install: "安裝單",
+  measure: "丈量單",
 };
 
 /** 空間選項（按鈕）；其他的空間在輸入框自己打字。 */
