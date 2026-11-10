@@ -51,6 +51,10 @@ export interface SalesWindow {
   product: string;
   productCustom: boolean;
   colorCode: string;
+  /** 加鉛條（只有布、紗才有）：印在單上色號旁的紅字 */
+  leadWeight: boolean;
+  /** 開防焰證明：色號印成紅字，後面自動加「(防焰證明)」 */
+  fireProof: boolean;
   /** 窗型與各段邊長（L 型兩段，八角窗八段） */
   shape: WindowShape;
   shapeLengths: string[];
@@ -146,6 +150,10 @@ export const SALES_PRODUCTS: string[] = [
   "拉門",
 ];
 
+/** 只有這些品項才有「加鉛條」選項。 */
+export const LEAD_WEIGHT_PRODUCTS: string[] = ["布", "紗"];
+export const supportsLeadWeight = (product: string): boolean => LEAD_WEIGHT_PRODUCTS.includes(product);
+
 /** 只有這個品項才需要填倍數。 */
 export const MULTIPLIER_PRODUCT = "布";
 export const CUSTOM_PRODUCT_VALUE = "__custom_product__";
@@ -216,6 +224,8 @@ export const newWindow = (): SalesWindow => ({
   product: "",
   productCustom: false,
   colorCode: "",
+  leadWeight: false,
+  fireProof: false,
   shape: "t",
   shapeLengths: [],
   widthUnit: "cm",
@@ -241,6 +251,8 @@ export const isBlankWindow = (w: SalesWindow): boolean =>
     w.product ||
     w.shapeLengths.some((length) => length) ||
     w.colorCode ||
+    w.leadWeight ||
+    w.fireProof ||
     w.width ||
     w.height ||
     w.shape !== "t" ||
@@ -282,7 +294,9 @@ export const mountText = (w: SalesWindow): string => {
 export const windowSummary = (w: SalesWindow): string =>
   [
     w.space,
-    [w.product, w.colorCode].filter(Boolean).join(" "),
+    [w.product, w.colorCode, w.fireProof ? "(防焰證明)" : "", w.leadWeight ? "加鉛條" : ""]
+      .filter(Boolean)
+      .join(" "),
     w.shape !== "t" ? WINDOW_SHAPE_LABELS[w.shape] : "",
     w.width || w.height
       ? `${w.width || "?"}${UNIT_SHORT[w.widthUnit]}×${w.height || "?"}${UNIT_SHORT[w.heightUnit]}`
