@@ -14,6 +14,7 @@ import {
   Menu,
   Pencil,
   ReceiptText,
+  Ruler,
   Tags,
   Users,
   type LucideIcon,
@@ -50,6 +51,7 @@ const NAV_ITEMS: NavItem[] = [
 
 const SALES_ITEMS: NavItem[] = [
   { to: "/sales/new", label: "新增業務單", icon: FilePlus2 },
+  { to: "/sales/measure/new", label: "新增丈量單", icon: Ruler },
   { to: "/sales", label: "我的單", icon: ClipboardList, end: true },
 ];
 
@@ -279,6 +281,7 @@ function SalesOnlyWorkspace() {
     && pathname !== "/sales/print";
   const links: NavItem[] = [
     { to: "/sales/new", label: "新增業務單", icon: FilePlus2 },
+    { to: "/sales/measure/new", label: "新增丈量單", icon: Ruler },
     { to: "/sales", label: "我的單", icon: ClipboardList, end: true },
   ];
   return (
@@ -320,7 +323,7 @@ function SalesOnlyWorkspace() {
         </div>
       </main>
       {showMobileTabs && (
-        <nav className="print-hidden fixed inset-x-0 bottom-0 z-30 grid grid-cols-2 border-t bg-card/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_hsl(var(--foreground)/0.06)] backdrop-blur md:hidden">
+        <nav className="print-hidden fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t bg-card/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_hsl(var(--foreground)/0.06)] backdrop-blur md:hidden">
           {links.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
