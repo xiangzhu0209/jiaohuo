@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Printer, Save, Send } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, FileCheck2, Plus, Printer, Save, Send } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { createSalesOrder, fetchSalesOrder, updateSalesOrder } from "@/lib/sales-db";
@@ -49,10 +49,19 @@ const PAY_OPTIONS = (Object.keys(PAY_LABELS) as Exclude<PayMethod, "">[]).map((v
   label: PAY_LABELS[value],
 }));
 
+interface SaveArgs {
+  target: SalesStatus;
+  /** 不指定就沿用目前的模式（丈量單／一般業務單） */
+  measureOnly?: boolean;
+  /** 存完之後：default 照原本流程、print 到列印頁、stay 留在原頁 */
+  after?: "default" | "print" | "stay";
+}
+
 function SalesFormInner() {
   const { id } = useParams();
   const isEdit = !!id;
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const qc = useQueryClient();
   const { user, profileName, businessAccount, salesMember } = useAuth();
   const isAdmin = isAdminEmail(user?.email);
@@ -126,6 +135,8 @@ function SalesFormInner() {
   }, [existing]);
 
   const status: SalesStatus = existing?.status ?? "draft";
+  // 丈量單：新增時由網址決定，編輯時看這張單本身的標記
+  const measureMode = isEdit ? existing?.measureOnly === true : pathname.startsWith("/sales/measure");
   // 已下單的單，業務不能再改；管理者可以
   const readOnly = isEdit && status !== "draft" && !isAdmin && !existing?.editApproved;
 
@@ -155,7 +166,7 @@ function SalesFormInner() {
 
   const duplicateWindow = (wid: string) => {
     // 複製出來的窗位預設「與上一個同窗」（常見用法：複製布改成紗）
-    const copy = { ...windows.find((w) => w.id === wid)!, id: newWindowId(), sameAsPrev: true };
+    const copy = { ...windows.find((w) => w.id === wid)!, id: newWindowId(), sameAsPrev: !measureMode };
     setWindows((prev) => {
       const at = prev.findIndex((w) => w.id === wid);
       const next = [...prev];
@@ -189,7 +200,7 @@ function SalesFormInner() {
   };
 
   const save = useMutation({
-    mutationFn: async (target: SalesStatus) => {
+    mutationFn: async ({ target, measureOnly = measureMode }: SaveArgs) => {
       const input: SalesOrderInput = {
         ownerId: user?.id ?? "",
         person: person.trim(),
@@ -205,6 +216,7 @@ function SalesFormInner() {
         depositMethod,
         balanceMethod,
         notes: notes.trim(),
+        measureOnly,
         status: target,
         editRequestStatus: existing?.editRequestStatus ?? "",
         editRequestReason: existing?.editRequestReason ?? "",
@@ -221,12 +233,18 @@ function SalesFormInner() {
       }
       return createSalesOrder(input);
     },
-    onSuccess: (savedId, target) => {
+    onSuccess: (savedId, { target, measureOnly = measureMode, after = "default" }) => {
       void qc.invalidateQueries({ queryKey: ["sales-orders"] });
       void qc.invalidateQueries({ queryKey: ["sales-inbox"] });
       void qc.invalidateQueries({ queryKey: ["sales-order", savedId] });
       void qc.invalidateQueries({ queryKey: ["sales-print"] });
-      if (target === "draft") {
+      if (measureOnly) {
+        toast("已存成丈量單");
+        if (after === "print") navigate(`/sales/print?ids=${savedId}&type=measure`);
+        else navigate("/sales");
+      } else if (after === "stay") {
+        toast("已轉成業務單，請把其他資料補齊");
+      } else if (target === "draft") {
         toast("已存成草稿");
         navigate("/sales");
       } else {
@@ -265,7 +283,16 @@ function SalesFormInner() {
       toast(issues.slice(0, 3).join("；"));
       return;
     }
-    save.mutate(target);
+    save.mutate({ target });
+  };
+
+  /** 丈量單只要有客戶名稱就能存（之後才找得到）。after：存完去哪。 */
+  const saveMeasure = (after: SaveArgs["after"], measureOnly = true) => {
+    if (!customerName.trim()) {
+      toast("請填客戶名稱");
+      return;
+    }
+    save.mutate({ target: "draft", measureOnly, after });
   };
 
   if (isEdit && isLoading) {
@@ -294,9 +321,13 @@ function SalesFormInner() {
         </Button>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">
-            {isEdit ? "編輯業務單" : "新增業務單"}
+            {measureMode ? (isEdit ? "編輯丈量單" : "新增丈量單") : isEdit ? "編輯業務單" : "新增業務單"}
           </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">先填客戶資料，再一個一個加窗位</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {measureMode
+              ? "只要填客戶資料、尺寸和鎖點，其他等確認下單再補"
+              : "先填客戶資料，再一個一個加窗位"}
+          </p>
         </div>
       </div>
 
@@ -356,6 +387,7 @@ function SalesFormInner() {
             </Field>
           </div>
 
+          {!measureMode && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="預計安裝時間">
               <Input
@@ -376,6 +408,7 @@ function SalesFormInner() {
               />
             </Field>
           </div>
+          )}
 
           <Field label="客戶名稱 *">
             <Input
@@ -411,6 +444,23 @@ function SalesFormInner() {
         </CardContent>
       </Card>
 
+      {measureMode ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">備註</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              rows={3}
+              className="text-base"
+              value={notes}
+              disabled={readOnly}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="例如：客戶想換掉舊窗簾、有小孩"
+            />
+          </CardContent>
+        </Card>
+      ) : (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">金額</CardTitle>
@@ -465,6 +515,7 @@ function SalesFormInner() {
           </Field>
         </CardContent>
       </Card>
+      )}
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -490,6 +541,7 @@ function SalesFormInner() {
             onDuplicate={() => duplicateWindow(w.id)}
             onMove={(delta) => moveWindow(w.id, delta)}
             onRemove={() => setRemoveTarget(w.id)}
+            measureMode={measureMode}
           />
         ))}
 
@@ -511,14 +563,45 @@ function SalesFormInner() {
           businessMode ? "bottom-[calc(4rem+max(0.5rem,env(safe-area-inset-bottom)))] md:bottom-0 md:left-0" : "md:left-64",
         )}>
           <div className="mx-auto flex max-w-2xl gap-2">
-            {isNewOrDraft ? (
+            {measureMode ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 flex-1 px-2 text-sm"
+                  disabled={busy || !user}
+                  onClick={() => saveMeasure("default")}
+                >
+                  <Save className="size-4" /> 存丈量單
+                </Button>
+                <Button
+                  type="button"
+                  variant={isEdit ? "outline" : "default"}
+                  className="h-12 flex-1 px-2 text-sm"
+                  disabled={busy || !user}
+                  onClick={() => saveMeasure("print")}
+                >
+                  <Printer className="size-4" /> 存並列印
+                </Button>
+                {isEdit && (
+                  <Button
+                    type="button"
+                    className="h-12 flex-1 px-2 text-sm"
+                    disabled={busy || !user}
+                    onClick={() => saveMeasure("stay", false)}
+                  >
+                    <FileCheck2 className="size-4" /> 轉成業務單
+                  </Button>
+                )}
+              </>
+            ) : isNewOrDraft ? (
               <>
                 <Button
                   type="button"
                   variant="outline"
                   className="h-12 flex-1 text-base"
                   disabled={busy || !user}
-                  onClick={() => save.mutate("draft")}
+                  onClick={() => save.mutate({ target: "draft" })}
                 >
                   <Save className="size-5" /> 存草稿
                 </Button>
@@ -571,9 +654,10 @@ function SalesFormInner() {
 /** 用網址上的 id 當 key，從一張單切到另一張時表單會整個重來。 */
 export default function SalesForm() {
   const { id } = useParams();
+  const { pathname } = useLocation();
   return (
     <SalesGuard>
-      <SalesFormInner key={id ?? "new"} />
+      <SalesFormInner key={id ?? (pathname.startsWith("/sales/measure") ? "new-measure" : "new")} />
     </SalesGuard>
   );
 }

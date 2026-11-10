@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ClipboardList, FilePenLine, Pencil, Plus, Printer, Trash2 } from "lucide-react";
+import { ClipboardList, FilePenLine, Pencil, Plus, Printer, Ruler, Trash2 } from "lucide-react";
 import { deleteSalesOrder, fetchMySalesOrders, requestSalesOrderEdit } from "@/lib/sales-db";
 import { KIND_LABELS, STATUS_LABELS, type SalesOrder, type SalesStatus } from "@/lib/sales-types";
 import { fmtMoney } from "@/lib/order-utils";
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
-type Filter = "all" | SalesStatus;
+type Filter = "all" | "measure" | SalesStatus;
 
 function MyOrdersInner() {
   const { user } = useAuth();
@@ -42,12 +42,20 @@ function MyOrdersInner() {
   });
 
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { all: orders.length, draft: 0, submitted: 0, ordered: 0 };
-    for (const o of orders) c[o.status] += 1;
+    const c: Record<Filter, number> = { all: orders.length, measure: 0, draft: 0, submitted: 0, ordered: 0 };
+    for (const o of orders) {
+      if (o.measureOnly) c.measure += 1;
+      else c[o.status] += 1;
+    }
     return c;
   }, [orders]);
 
-  const shown = filter === "all" ? orders : orders.filter((o) => o.status === filter);
+  // 丈量單狀態也是草稿，但另外一個分頁，不跟一般草稿混在一起
+  const shown = orders.filter((o) => {
+    if (filter === "all") return true;
+    if (filter === "measure") return o.measureOnly;
+    return !o.measureOnly && o.status === filter;
+  });
 
   const submitEditRequest = useMutation({
     mutationFn: async () => {
@@ -67,7 +75,7 @@ function MyOrdersInner() {
   const remove = useMutation({
     mutationFn: (id: string) => deleteSalesOrder(id),
     onSuccess: () => {
-      toast("已刪除草稿");
+      toast("已刪除");
       void qc.invalidateQueries({ queryKey: ["sales-orders"] });
     },
     onError: (err) => toast(`刪除失敗：${(err as Error).message}`),
@@ -80,14 +88,20 @@ function MyOrdersInner() {
           <h1 className="text-xl font-semibold tracking-tight">我的單</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">自己送出的業務單與草稿</p>
         </div>
-        <Button onClick={() => navigate("/sales/new")} className="h-11">
-          <Plus className="size-5" /> 新增業務單
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={() => navigate("/sales/measure/new")} className="h-11">
+            <Ruler className="size-5" /> 丈量單
+          </Button>
+          <Button onClick={() => navigate("/sales/new")} className="h-11">
+            <Plus className="size-5" /> 業務單
+          </Button>
+        </div>
       </div>
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="all">全部 {counts.all}</TabsTrigger>
+          <TabsTrigger value="measure">丈量 {counts.measure}</TabsTrigger>
           <TabsTrigger value="draft">草稿 {counts.draft}</TabsTrigger>
           <TabsTrigger value="submitted">待下單 {counts.submitted}</TabsTrigger>
           <TabsTrigger value="ordered">已下單 {counts.ordered}</TabsTrigger>
@@ -103,7 +117,11 @@ function MyOrdersInner() {
       ) : shown.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed py-14 text-center text-sm text-muted-foreground">
           <ClipboardList className="size-9 opacity-40" />
-          {filter === "all" ? "還沒有業務單，按右上角「新增業務單」開始" : `沒有「${STATUS_LABELS[filter]}」的單`}
+          {filter === "all"
+            ? "還沒有業務單，按右上角「業務單」或「丈量單」開始"
+            : filter === "measure"
+              ? "沒有丈量單"
+              : `沒有「${STATUS_LABELS[filter]}」的單`}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -117,7 +135,7 @@ function MyOrdersInner() {
                       {o.orderDate}・{KIND_LABELS[o.kind]}・{o.windows.length} 個窗位
                     </p>
                   </div>
-                  <StatusBadge status={o.status} />
+                  <StatusBadge status={o.status} measure={o.measureOnly} />
                 </div>
                 {o.total > 0 && (
                   <p className="text-sm tabular-nums text-muted-foreground">
@@ -139,7 +157,7 @@ function MyOrdersInner() {
                 <div className="flex flex-wrap gap-2">
                   {o.status === "draft" || o.editApproved ? (
                     <Button variant="outline" size="sm" onClick={() => navigate(`/sales/${o.id}/edit`)}>
-                      <Pencil className="size-4" /> 編輯
+                      <Pencil className="size-4" /> {o.measureOnly ? "編輯／轉成業務單" : "編輯"}
                     </Button>
                   ) : (
                     <Button
@@ -212,9 +230,9 @@ function MyOrdersInner() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>刪除這張草稿？</AlertDialogTitle>
+            <AlertDialogTitle>{deleteTarget?.measureOnly ? "刪除這張丈量單？" : "刪除這張草稿？"}</AlertDialogTitle>
             <AlertDialogDescription>
-              「{deleteTarget?.customerName || "未填客戶名"}」的草稿刪除後無法復原。
+              「{deleteTarget?.customerName || "未填客戶名"}」刪除後無法復原。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

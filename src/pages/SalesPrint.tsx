@@ -43,8 +43,9 @@ function PrintInner() {
     [params],
   );
   const idsKey = ids.join(",");
-  // 留存單（完整）或安裝單（不含牌價），由網址 type 決定，預設留存單
-  const variant: PrintVariant = params.get("type") === "install" ? "install" : "keep";
+  const [paper, setPaper] = useState<Paper>(readPaper);
+  const [exporting, setExporting] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const changeVariant = (v: PrintVariant) =>
     setParams(
       (prev) => {
@@ -55,9 +56,6 @@ function PrintInner() {
       { replace: true },
     );
 
-  const [paper, setPaper] = useState<Paper>(readPaper);
-  const [exporting, setExporting] = useState(false);
-  const [zoom, setZoom] = useState(1);
   const fitRef = useRef<HTMLDivElement>(null);
   const sheetsRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
@@ -88,6 +86,16 @@ function PrintInner() {
     enabled: ids.length > 0,
     queryFn: () => fetchSalesOrdersByIds(ids),
   });
+
+  // 種類由網址 type 決定：留存單（完整）／安裝單（不含牌價）／丈量單（空欄位留白手寫）。
+  // 沒指定時：選到的單全是丈量單就預設印丈量單，否則印留存單。
+  const typeParam = params.get("type");
+  const variant: PrintVariant =
+    typeParam === "install" || typeParam === "measure" || typeParam === "keep"
+      ? typeParam
+      : orders.length > 0 && orders.every((o) => o.measureOnly)
+        ? "measure"
+        : "keep";
 
   // 預覽依畫面寬度縮放，手機上也看得到整張紙（列印時一律還原成原尺寸）
   const paperWidth = paperWidthPx(paper);
@@ -213,6 +221,7 @@ function PrintInner() {
                 <SelectContent>
                   <SelectItem value="keep">{VARIANT_LABELS.keep}</SelectItem>
                   <SelectItem value="install">{VARIANT_LABELS.install}</SelectItem>
+                  <SelectItem value="measure">{VARIANT_LABELS.measure}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
