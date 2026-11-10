@@ -122,8 +122,8 @@ function WindowCell({
   // 編號長得像 3-1 就代表和別的窗位是同一窗
   const grouped = label.includes("-");
   const measure = variant === "measure";
-  // 丈量單：沒填的欄位印成底線，讓業務邊跟客人討論邊手寫
-  const empty = measure ? <HandwriteBlank compact={compact} short /> : "—";
+  // 丈量單：沒填的欄位什麼都不印，留白讓業務邊跟客人討論邊手寫
+  const empty = measure ? "" : "—";
   const showPrice = variant !== "install";
   // 加鉛條只有布、紗才有；換成別的品項時就算舊資料還勾著也不印
   const showLead = w.leadWeight && supportsLeadWeight(w.product);
@@ -143,14 +143,7 @@ function WindowCell({
           <span className={cn("mr-1 font-normal", grouped ? "text-destructive" : "text-muted-foreground")}>
             {label}.
           </span>
-          {measure && !w.product && (
-            <>
-              <span className="font-normal text-muted-foreground">品項：</span>
-              <HandwriteBlank compact={compact} short />
-              <span className="ml-2 font-normal text-muted-foreground">色號：</span>
-              <HandwriteBlank compact={compact} short />
-            </>
-          )}
+          {measure && !w.product && <span className="font-normal text-muted-foreground">品項：</span>}
           {w.product && field("product", w.product)}
           {(w.colorCode || w.fireProof || showLead) && (
             <>
@@ -168,6 +161,7 @@ function WindowCell({
             </>
           )}
         </p>
+        {measure && !w.product && !w.colorCode && <Line label="色號">{null}</Line>}
         {w.shape !== "t" && <Line label="窗型">{field("shape", WINDOW_SHAPE_LABELS[w.shape])}</Line>}
         <Line label="空間">
           {field("space", w.space)}
@@ -213,11 +207,11 @@ const valueCell = (compact: boolean) => cn(cellBase, "break-words", compact ? "p
 
 const payText = (method: PayMethod) => (method ? PAY_LABELS[method] : "");
 
-/** 沒填的欄位留一段底線空白，方便之後用手寫。 */
+/** 沒填的欄位留一段空白（不印底線），方便之後用手寫。 */
 function HandwriteBlank({ compact, short = false }: { compact: boolean; short?: boolean }) {
   const width = short ? (compact ? "w-[16mm]" : "w-[22mm]") : compact ? "w-[34mm]" : "w-[44mm]";
   return (
-    <span aria-hidden="true" className={cn("inline-block border-b border-foreground align-bottom", width)}>
+    <span aria-hidden="true" className={cn("inline-block align-bottom", width)}>
       &nbsp;
     </span>
   );
@@ -234,7 +228,7 @@ function OrderHeader({
 }) {
   const balance = balanceOf(order.total, order.deposit);
   const measure = variant === "measure";
-  // 丈量單：沒填的欄位印成底線，之後手寫
+  // 丈量單：沒填的欄位留一段空白（不印底線），之後手寫
   const field = (name: string, text: string) => text
     ? <SalesText text={text} field={`header:${name}`} marks={order.printEmphasis} />
     : measure ? <HandwriteBlank compact={compact} short /> : "—";
@@ -242,13 +236,13 @@ function OrderHeader({
   const V = valueCell(compact);
   return (
     <div className={cn("flex flex-col", compact ? "gap-1" : "gap-1.5")}>
-      <div className="flex flex-wrap items-end justify-between gap-x-4">
+      <div className="flex items-end justify-between gap-x-4 whitespace-nowrap">
         <p>
           <span className="mr-3 border border-foreground px-1.5 font-semibold">{VARIANT_LABELS[variant]}</span>
           <span className="font-semibold">{field("kind", KIND_LABELS[order.kind])}</span>
           <span className="ml-3">負責人：{field("person", order.person)}</span>
         </p>
-        <div className="flex flex-wrap justify-start gap-x-4 gap-y-0.5">
+        <div className="flex flex-col items-start gap-y-0.5">
           <p>預計安裝時間：{field("installTime", order.installTime)}</p>
           <p>
             排定安裝時間：
@@ -331,7 +325,7 @@ export default function SalesPage({
       {pageNo === 1 ? (
         <OrderHeader order={order} compact={compact} variant={variant} />
       ) : (
-        <p className="flex justify-between border-b pb-1 font-medium">
+        <p className="flex justify-between whitespace-nowrap border-b pb-1 font-medium">
           <span>
             <span className="mr-2 border border-foreground px-1 text-[0.85em]">{VARIANT_LABELS[variant]}</span>
             客戶名：{order.customerName || "—"}
