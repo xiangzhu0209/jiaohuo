@@ -7,6 +7,7 @@ import type { Order, OrderItem } from "@/lib/types";
 import OrderSheets from "@/components/order/order-sheets";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { printPage } from "@/lib/print";
 
 export default function BatchPrint() {
   const navigate = useNavigate();
@@ -69,7 +70,7 @@ export default function BatchPrint() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={() => window.print()} disabled={orders.length === 0}>
+          <Button onClick={() => printPage()} disabled={orders.length === 0}>
             <Printer className="size-4" /> 列印 / 存成 PDF
           </Button>
         </div>

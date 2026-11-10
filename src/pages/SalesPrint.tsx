@@ -12,6 +12,7 @@ import {
   type PrintVariant,
 } from "@/lib/sales-types";
 import { downloadSheetPng, paperWidthPx } from "@/lib/order-utils";
+import { printPage } from "@/lib/print";
 import { useAuth } from "@/hooks/use-auth";
 import SalesGuard from "@/components/order/sales-guard";
 import SalesPage from "@/components/order/sales-sheet";
@@ -236,7 +237,7 @@ function PrintInner() {
               <ImageDown className="size-4" />
               {exporting ? "產生中…" : pages.length > 1 ? `匯出圖片（${pages.length} 張）` : "匯出圖片"}
             </Button>
-            <Button disabled={pages.length === 0} onClick={() => window.print()}>
+            <Button disabled={pages.length === 0} onClick={() => printPage({ label: "匯出圖片", run: () => void exportImages() })}>
               <Printer className="size-4" /> 列印／存成 PDF
             </Button>
           </div>

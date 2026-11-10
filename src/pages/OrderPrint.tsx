@@ -21,6 +21,7 @@ import OrderSheets from "@/components/order/order-sheets";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { printPage } from "@/lib/print";
 
 /** 螢幕上的字級縮放（只影響畫面預覽，列印固定 A4／A5 原尺寸）。 */
 const ZOOM_KEY = "order-print-zoom-v1";
@@ -256,7 +257,7 @@ export default function OrderPrint() {
                 {exporting === "batch" ? "產生中…" : "各廠商各一張"}
               </Button>
             )}
-            <Button onClick={() => window.print()}>
+            <Button onClick={() => printPage()}>
               <Printer className="size-4" /> 列印 / 存成 PDF
             </Button>
           </div>
