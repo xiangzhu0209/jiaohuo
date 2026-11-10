@@ -49,6 +49,7 @@ export const routers = [
       { path: "setup", name: "setup", element: <Setup /> },
       { path: "sales", name: "sales-orders", element: <SalesOrders /> },
       { path: "sales/new", name: "sales-new", element: <SalesForm /> },
+      { path: "sales/measure/new", name: "sales-measure-new", element: <SalesForm /> },
       { path: "sales/inbox", name: "sales-inbox", element: <SalesInbox /> },
       { path: "sales/members", name: "sales-members", element: <SalesMembers /> },
       { path: "sales/pending", name: "sales-pending", element: <SalesPending /> },
