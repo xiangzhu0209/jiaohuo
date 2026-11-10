@@ -85,6 +85,7 @@ export default function WindowCard({
   onDuplicate,
   onMove,
   onRemove,
+  measureMode = false,
 }: {
   index: number;
   /** 顯示用編號（同窗會是 3-1、3-2） */
@@ -98,6 +99,8 @@ export default function WindowCard({
   onDuplicate: () => void;
   onMove: (delta: -1 | 1) => void;
   onRemove: () => void;
+  /** 丈量單：只顯示空間、窗型、尺寸、鎖點，其他欄位先留給手寫 */
+  measureMode?: boolean;
 }) {
   const summary = windowSummary(win);
   const inputClass = "h-11 text-base";
@@ -159,7 +162,7 @@ export default function WindowCard({
               onChange={(e) => onChange({ space: e.target.value })}
               placeholder="其他空間，自己輸入"
             />
-            {index > 1 && (
+            {!measureMode && index > 1 && (
               <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-primary/50 bg-primary/5 px-3 py-2.5 text-sm">
                 <Checkbox className="size-5" checked={win.sameAsPrev} disabled={disabled}
                   onCheckedChange={(v) => onChange({ sameAsPrev: v === true })} />
@@ -168,6 +171,8 @@ export default function WindowCard({
             )}
           </Field>
 
+          {!measureMode && (
+            <>
           <div className="grid grid-cols-2 gap-3">
             <Field label="品項">
               <Select
@@ -228,6 +233,8 @@ export default function WindowCard({
               開防焰證明
             </label>
           </div>
+            </>
+          )}
 
           <Field label="窗型">
             <Choice
@@ -293,6 +300,8 @@ export default function WindowCard({
             </Field>
           </div>
 
+          {!measureMode && (
+            <>
           <div className="grid grid-cols-2 gap-3">
             <Field label="牌價">
               <Input
@@ -336,6 +345,8 @@ export default function WindowCard({
               />
             </Field>
           </div>
+            </>
+          )}
 
           <Field label="鎖點">
             <Choice
@@ -381,6 +392,8 @@ export default function WindowCard({
             )}
           </Field>
 
+          {!measureMode && (
+            <>
           <Field label="製作備註">
             <Textarea
               rows={2}
@@ -402,6 +415,8 @@ export default function WindowCard({
               placeholder="給安裝師傅看的備註"
             />
           </Field>
+            </>
+          )}
 
           {!disabled && (
             <div className="flex flex-wrap items-center gap-2 border-t pt-3">
